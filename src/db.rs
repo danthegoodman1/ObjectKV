@@ -1,8 +1,13 @@
 use crate::subspace::Subspace;
 
 pub trait DBOps {
-    fn get(key: &str) -> ();
-    fn write(key: &str, value: &[u8]) -> ();
+    fn get(&self, key: &str) -> impl std::future::Future<Output = Result<(), ()>> + Send;
+
+    fn write(
+        &self,
+        key: &str,
+        value: &[u8],
+    ) -> impl std::future::Future<Output = Result<(), ()>> + Send;
 }
 
 pub struct DB {
@@ -20,11 +25,11 @@ impl DB {
 }
 
 impl DBOps for DB {
-    fn get(key: &str) -> () {
+    async fn get(&self, key: &str) -> Result<(), ()> {
         todo!()
     }
-    
-    fn write(key: &str, value: &[u8]) -> () {
+
+    async fn write(&self, key: &str, value: &[u8]) -> Result<(), ()> {
         todo!()
     }
 }
