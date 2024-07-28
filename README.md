@@ -4,8 +4,6 @@ A object storage native key-value database with local disk caching.
 
 Modified 2-level LSM architecture.
 
-Current plan is Rust (for latency and concurrency benefits), but might need to change to Go since I know that 100x better.
-
 ## Features
 
 - Consistent operations (CAS, update if exists, write if not exists, delete if exists, etc.)
