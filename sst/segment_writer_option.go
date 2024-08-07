@@ -8,3 +8,22 @@ func WriterLocalCacheDir(path string) SegmentWriterOption {
 		writer.localCacheDir = &path
 	}
 }
+
+// WriterUseZSTDCompression uses ZSTD compression when writing, overwriting LZ4 compression settings.
+//
+// `level` Must be [1, 11].
+func WriterUseZSTDCompression(level int) SegmentWriterOption {
+	if level > 11 && level <= 0 {
+		globalLogger.Fatal().Msg("WriterUseZSTDCompression level must be [1, 11]")
+	}
+	return func(writer *SegmentWriter) {
+		writer.zstdCompressionLevel = level
+	}
+}
+
+// WriterUseLZ4Compression uses LZ4 compression. Will be overwritten by WriterUseZSTDCompression level > 0 compression
+func WriterUseLZ4Compression() SegmentWriterOption {
+	return func(writer *SegmentWriter) {
+		writer.lz4Compression = true
+	}
+}
