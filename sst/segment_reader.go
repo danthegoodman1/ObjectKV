@@ -22,9 +22,13 @@ type SegmentReader struct {
 	lastKey  []byte // todo
 
 	blockIndex any // todo map of (start, (offset, size))
+
+	// options
+	cacheInBackground bool
+	localCacheDir     *string
 }
 
-func NewSegmentReader(opts ...SegmentReaderOptions) SegmentReader {
+func NewSegmentReader(opts ...SegmentReaderOption) SegmentReader {
 	sr := SegmentReader{}
 
 	for _, opt := range opts {
@@ -34,10 +38,11 @@ func NewSegmentReader(opts ...SegmentReaderOptions) SegmentReader {
 	return sr
 }
 
-// Open will open a segment file for reading. Automatically will read from the locally cached
-// file if it exists at the localPath. It will also read in the metadata of the segment for
-// subsequent operations.
-func (s *SegmentReader) Open(path string, localPath *string, cacheInBackground bool) error {
+// Open will open a segment file for reading. Automatically will read from the locally cached file if it exists at the
+// localPath.
+//
+// It will also read in the metadata of the segment for subsequent operations.
+func (s *SegmentReader) Open(path string) error {
 	// TODO in goroutine grab background cache lock? maybe this can be package local since files are immutable
 	panic("todo")
 }
@@ -50,9 +55,10 @@ func (s *SegmentReader) ProbeBloomFilter(key string) bool {
 
 var ErrNoMoreRows = errors.New("no more rows")
 
-// RowIter creates a new row iterator. This should only really be used for
-// compaction, as this just starts loading blocks and returning rows.
-// Returns io.EOF when there are no more rows
+// RowIter creates a new row iterator. This should only really be used for compaction, as this just starts loading
+// blocks and returning rows.
+//
+// Returns io.EOF when there are no more rows.
 //
 // TODO this can be done logically by just reading blocks
 func (s *SegmentReader) RowIter() ([]any, error) {
@@ -61,6 +67,7 @@ func (s *SegmentReader) RowIter() ([]any, error) {
 }
 
 // ReadBlockAtOffset will read a data block at an offset, decompress and deserialize it.
+//
 // Will error if the offset is not a valid block starting point
 func (s *SegmentReader) ReadBlockAtOffset(offset int) (any, error) {
 	// todo read the data at the offset, reading the index at the offset

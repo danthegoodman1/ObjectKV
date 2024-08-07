@@ -3,9 +3,12 @@ package sst
 type SegmentWriter struct {
 	currentBlockSize int
 	blockStartKey    []byte
+
+	// options
+	localCacheDir *string
 }
 
-func NewSegmentWriter(opts ...SegmentWriterOptions) SegmentWriter {
+func NewSegmentWriter(opts ...SegmentWriterOption) SegmentWriter {
 	sw := SegmentWriter{}
 	for _, opt := range opts {
 		opt(&sw)
@@ -14,14 +17,13 @@ func NewSegmentWriter(opts ...SegmentWriterOptions) SegmentWriter {
 	return sw
 }
 
-// Open the remote file for writing, optionally concurrently writing to a local cache
+// Open the remote file for writing, optionally concurrently writing to a local cache.
 func (s *SegmentWriter) Open(path string, localPath *string) error {
 	// todo check if something is already open, if so error
 	panic("todo")
 }
 
-// WriteRow writes a given row to the segment. It is expected that rows are written
-// in order.
+// WriteRow writes a given row to the segment. It is expected that rows are written in order.
 func (s *SegmentWriter) WriteRow(key, val []byte, compression string) error {
 	// todo write the row for the current block
 	// todo write the (padded min) multiple of 4k block to the file
@@ -30,9 +32,9 @@ func (s *SegmentWriter) WriteRow(key, val []byte, compression string) error {
 	panic("todo")
 }
 
-// Close finishes writing the segment file by writing the final metadata to the
-// file and closing the writer. Once this has completed then the segment is considered
-// durably stored.
+// Close finishes writing the segment file by writing the final metadata to the file and closing the writer.
+//
+// Once this has completed then the segment is considered durably stored.
 func (s *SegmentWriter) Close() error {
 	// todo write the block index
 	// todo write the bloom filter
