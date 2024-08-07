@@ -1,5 +1,7 @@
 package sst
 
+import "github.com/bits-and-blooms/bloom"
+
 type SegmentWriterOption func(writer *SegmentWriter)
 
 // WriterLocalCacheDir will concurrently write the segment to the local cache directory
@@ -28,8 +30,8 @@ func WriterUseLZ4Compression() SegmentWriterOption {
 	}
 }
 
-func WriterUseBloomFilter() SegmentWriterOption {
+func WriterUseNewBloomFilter(items uint, falsePositiveRate float64) SegmentWriterOption {
 	return func(writer *SegmentWriter) {
-		writer.bloomFilter = nil // todo set bloom filter not nil
+		writer.bloomFilter = bloom.NewWithEstimates(items, falsePositiveRate)
 	}
 }

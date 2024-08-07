@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/bits-and-blooms/bloom"
 	"github.com/klauspost/compress/zstd"
 	"io"
 )
@@ -17,7 +18,7 @@ type SegmentWriter struct {
 	blockWriter    io.Writer
 	blockIndex     any // todo, either a tree or https://github.com/wk8/go-ordered-map
 	lastBlockKey   []byte
-	bloomFilter    any
+	bloomFilter    *bloom.BloomFilter
 
 	// options
 	localCacheDir        *string
@@ -72,16 +73,19 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 	s.lastBlockKey = key
 
 	// write the row for the current block into the buffer
-	bytesWritten, err := s.blockWriter.Write([]byte{}) // todo
+	bytesWritten, err := s.blockWriter.Write([]byte{}) // todo write the key and value
 	if err != nil {
 		return fmt.Errorf("error in s.blockWriter.Write (zstd=%t, lz4=%t): %w", useZSTD, useLZ4, err)
 	}
 	s.currentBlockOffset += bytesWritten
 
 	// todo store the row in the bloom filter if needed
+	if s.bloomFilter != nil {
+		s.bloomFilter.Add(key)
+	}
 
 	if s.currentBlockOffset < 4096 {
-		// todo
+		// todo what ever is needed to continue if anything
 		return nil
 	}
 
@@ -89,6 +93,8 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 	// todo flush the block once 4k is tripped
 	// todo update the current block offset and clear writer and buffer
 	// todo write the metadata to memory for the block start
+	// reset the block writer
+	s.blockWriter = nil
 	panic("todo")
 }
 
@@ -97,7 +103,7 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 // Once this has completed then the segment is considered durably stored.
 func (s *SegmentWriter) Close() error {
 	// todo write the block index
-	// todo write the bloom filter
+	// todo write the bloom filter if using it
 	// todo record the first and last value of the file
 	// todo write the offset for where in the file the metadata starts
 	// todo close the remote file
