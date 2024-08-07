@@ -27,3 +27,9 @@ func WriterUseLZ4Compression() SegmentWriterOption {
 		writer.lz4Compression = true
 	}
 }
+
+func WriterUseBloomFilter() SegmentWriterOption {
+	return func(writer *SegmentWriter) {
+		writer.bloomFilter = nil // todo set bloom filter not nil
+	}
+}

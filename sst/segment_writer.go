@@ -14,13 +14,13 @@ type SegmentWriter struct {
 	currentBlockStartKey []byte
 	// Block buffer depends on compression setting
 	rawBlockBuffer bytes.Buffer
-	rawBlockWriter io.Writer
+	blockWriter    io.Writer
 	blockIndex     any // todo, either a tree or https://github.com/wk8/go-ordered-map
 	lastBlockKey   []byte
+	bloomFilter    any
 
 	// options
-	localCacheDir *string
-
+	localCacheDir        *string
 	zstdCompressionLevel int // if not 0, then use this
 	lz4Compression       bool
 
@@ -50,17 +50,19 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 	if s.closed {
 		return ErrWriterClosed
 	}
-	if s.rawBlockWriter == nil {
+	useZSTD := s.zstdCompressionLevel > 0
+	useLZ4 := !useZSTD && s.lz4Compression
+	if s.blockWriter == nil {
 		// create the writer if it doesn't exist, using the correct writer based on compression
 		// todo check lz4 compression
-		if s.zstdCompressionLevel > 0 {
+		if useZSTD {
 			enc, err := zstd.NewWriter(&s.rawBlockBuffer)
 			if err != nil {
 				return fmt.Errorf("error in zstd.NewWriter: %w", err)
 			}
-			s.rawBlockWriter = enc
+			s.blockWriter = enc
 		} else {
-			s.rawBlockWriter = &s.rawBlockBuffer
+			s.blockWriter = &s.rawBlockBuffer
 		}
 		s.currentBlockStartKey = key
 		s.currentBlockSize = 0
@@ -69,12 +71,24 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 	// update the key tracking for metadata
 	s.lastBlockKey = key
 
-	// todo write the row for the current block into the buffer
+	// write the row for the current block into the buffer
+	bytesWritten, err := s.blockWriter.Write([]byte{}) // todo
+	if err != nil {
+		return fmt.Errorf("error in s.blockWriter.Write (zstd=%t, lz4=%t): %w", useZSTD, useLZ4, err)
+	}
+	s.currentBlockOffset += bytesWritten
+
+	// todo store the row in the bloom filter if needed
+
+	if s.currentBlockOffset < 4096 {
+		// todo
+		return nil
+	}
+
 	// todo write the (padded min) multiple of 4k block to the file
 	// todo flush the block once 4k is tripped
 	// todo update the current block offset and clear writer and buffer
 	// todo write the metadata to memory for the block start
-	// todo store the row in the bloom filter
 	panic("todo")
 }
 
