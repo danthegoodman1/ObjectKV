@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/bits-and-blooms/bloom"
 	"github.com/klauspost/compress/zstd"
 	"io"
 )
@@ -16,16 +15,11 @@ type SegmentWriter struct {
 	// Block buffer depends on compression setting
 	rawBlockBuffer bytes.Buffer
 	blockWriter    io.Writer
-	blockIndex     any // todo, either a tree or https://github.com/wk8/go-ordered-map
-	lastBlockKey   []byte
-	bloomFilter    *bloom.BloomFilter
+	// index of (firstKey, (startOffset, sizeOffset))
+	blockIndex   any // todo, either a tree or https://github.com/wk8/go-ordered-map
+	lastBlockKey []byte
 
-	dataBlockThresholdBytes int
-
-	// options
-	localCacheDir        *string
-	zstdCompressionLevel int // if not 0, then use this
-	lz4Compression       bool
+	options SegmentWriterOptions
 
 	closed bool
 }
@@ -33,19 +27,19 @@ type SegmentWriter struct {
 // NewSegmentWriter creates a new segment writer and opens the file(s) for writing.
 //
 // A segment writer can never be reused.
-func NewSegmentWriter(path string, opts ...SegmentWriterOption) SegmentWriter {
+func NewSegmentWriter(path string, opts SegmentWriterOptions) SegmentWriter {
 	sw := SegmentWriter{
-		rawBlockBuffer:          bytes.Buffer{},
-		dataBlockThresholdBytes: 4096,
-	}
-	for _, opt := range opts {
-		opt(&sw)
+		rawBlockBuffer: bytes.Buffer{},
+		options:        opts,
 	}
 
 	return sw
 }
 
-var ErrWriterClosed = errors.New("segment writer already closed")
+var (
+	ErrWriterClosed           = errors.New("segment writer already closed")
+	ErrUnexpectedBytesWritten = errors.New("unexpected number of bytes written")
+)
 
 // WriteRow writes a given row to the segment. Cannot write after the writer is closed.
 //
@@ -54,8 +48,8 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 	if s.closed {
 		return ErrWriterClosed
 	}
-	useZSTD := s.zstdCompressionLevel > 0
-	useLZ4 := !useZSTD && s.lz4Compression
+	useZSTD := s.options.zstdCompressionLevel > 0
+	useLZ4 := !useZSTD && s.options.lz4Compression
 	if s.blockWriter == nil {
 		// create the writer if it doesn't exist, using the correct writer based on compression
 		// todo check lz4 compression
@@ -81,18 +75,29 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 		return fmt.Errorf("error in s.blockWriter.Write (zstd=%t, lz4=%t): %w", useZSTD, useLZ4, err)
 	}
 	s.currentBlockOffset += bytesWritten
+	s.currentBlockSize += bytesWritten
 
-	// todo store the row in the bloom filter if needed
-	if s.bloomFilter != nil {
-		s.bloomFilter.Add(key)
+	if s.options.bloomFilter != nil {
+		// store the row in the bloom filter if needed
+		s.options.bloomFilter.Add(key)
 	}
 
-	if s.currentBlockOffset < s.dataBlockThresholdBytes {
+	if s.currentBlockOffset < s.options.dataBlockThresholdBytes {
 		// todo what ever is needed to continue if anything
 		return nil
 	}
 
-	// todo write the (padded min) multiple of 4k block to the file
+	if remainder := s.currentBlockSize % 4096; remainder > 0 {
+		// write the (padded min) multiple of 4k block to the file after compression
+		bytesWritten, err = s.rawBlockBuffer.Write(make([]byte, remainder))
+		if err != nil {
+			return fmt.Errorf("error writing padding to rawBlockBuffer: %w", err)
+		}
+		if bytesWritten != remainder {
+			return fmt.Errorf("%w - expected=%d wrote=%d", ErrUnexpectedBytesWritten, remainder, bytesWritten)
+		}
+	}
+
 	// todo flush the block
 	// todo update the current block offset and clear writer and buffer
 	// todo write the metadata to memory for the block start

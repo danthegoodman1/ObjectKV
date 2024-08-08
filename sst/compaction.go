@@ -5,5 +5,3 @@ type CompactionStrategy interface {
 	// Anything that errors here should crash the process with logger.Fatal
 	Init()
 }
-
-type CompactionStrategyOption func(strategy CompactionStrategy)

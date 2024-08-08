@@ -24,15 +24,12 @@ type SegmentReader struct {
 	blockIndex any // todo map of (start, (offset, size))
 
 	// options
-	cacheInBackground bool
-	localCacheDir     *string
+	options SegmentReaderOptions
 }
 
-func NewSegmentReader(opts ...SegmentReaderOption) SegmentReader {
-	sr := SegmentReader{}
-
-	for _, opt := range opts {
-		opt(&sr)
+func NewSegmentReader(opts SegmentReaderOptions) SegmentReader {
+	sr := SegmentReader{
+		options: opts,
 	}
 
 	return sr

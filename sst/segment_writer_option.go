@@ -2,43 +2,20 @@ package sst
 
 import "github.com/bits-and-blooms/bloom"
 
-type SegmentWriterOption func(writer *SegmentWriter)
-
-// WriterLocalCacheDir will concurrently write the segment to the local cache directory
-func WriterLocalCacheDir(path string) SegmentWriterOption {
-	return func(writer *SegmentWriter) {
-		writer.localCacheDir = &path
-	}
+type SegmentWriterOptions struct {
+	bloomFilter             *bloom.BloomFilter
+	dataBlockThresholdBytes int
+	localCacheDir           *string
+	zstdCompressionLevel    int // if not 0, then use this
+	lz4Compression          bool
 }
 
-// WriterUseZSTDCompression uses ZSTD compression when writing, overwriting LZ4 compression settings.
-//
-// `level` Must be [1, 11].
-func WriterUseZSTDCompression(level int) SegmentWriterOption {
-	if level > 11 && level <= 0 {
-		globalLogger.Fatal().Msg("WriterUseZSTDCompression level must be [1, 11]")
-	}
-	return func(writer *SegmentWriter) {
-		writer.zstdCompressionLevel = level
-	}
-}
-
-// WriterUseLZ4Compression uses LZ4 compression. Will be overwritten by WriterUseZSTDCompression level > 0 compression
-func WriterUseLZ4Compression() SegmentWriterOption {
-	return func(writer *SegmentWriter) {
-		writer.lz4Compression = true
-	}
-}
-
-func WriterUseNewBloomFilter(items uint, falsePositiveRate float64) SegmentWriterOption {
-	return func(writer *SegmentWriter) {
-		writer.bloomFilter = bloom.NewWithEstimates(items, falsePositiveRate)
-	}
-}
-
-// WriterDataBlockThreshold sets the block interval, which is the low threshold
-func WriterDataBlockThreshold(thresholdBytes int) SegmentWriterOption {
-	return func(writer *SegmentWriter) {
-		writer.dataBlockThresholdBytes = thresholdBytes
+func DefaultSegmentWriterOptions() SegmentWriterOptions {
+	return SegmentWriterOptions{
+		bloomFilter:             bloom.NewWithEstimates(1_000_000, 0.01),
+		dataBlockThresholdBytes: 4096,
+		localCacheDir:           nil,
+		zstdCompressionLevel:    1,
+		lz4Compression:          false,
 	}
 }
