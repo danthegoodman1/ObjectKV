@@ -108,7 +108,7 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 		}
 	}
 
-	// todo flush the block to the data writer(s) (s3, local file)
+	// todo flush the rawBlockBuffer to the data writer(s) (s3, local file)
 	// todo update the current block offset and clear writer and buffer
 	// todo write the metadata to memory for the block start
 	// reset the block writer
