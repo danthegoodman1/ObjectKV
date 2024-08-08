@@ -2,6 +2,7 @@ package sst
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/klauspost/compress/zstd"
@@ -15,9 +16,10 @@ type SegmentWriter struct {
 	// Block buffer depends on compression setting
 	rawBlockBuffer bytes.Buffer
 	blockWriter    io.Writer
-	// index of (firstKey, (startOffset, sizeOffset))
-	blockIndex   any // todo, either a tree or https://github.com/wk8/go-ordered-map
-	lastBlockKey []byte
+
+	// index of (firstKey, (startOffset, compressed size, decompressed size))
+	blockIndex any // todo, either a tree or https://github.com/wk8/go-ordered-map
+	lastKey    []byte
 
 	options SegmentWriterOptions
 
@@ -66,11 +68,17 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 		s.currentBlockSize = 0
 	}
 
-	// update the key tracking for metadata
-	s.lastBlockKey = key
+	// update the key tracking for final write
+	s.lastKey = key
 
 	// write the row for the current block into the buffer
-	bytesWritten, err := s.blockWriter.Write([]byte{}) // todo write the key and value
+	rowBuf := make([]byte, 8+len(key)+len(val))
+	binary.LittleEndian.PutUint32(rowBuf[0:4], uint32(len(key)))
+	binary.LittleEndian.PutUint32(rowBuf[4:8], uint32(len(key)))
+	copy(rowBuf[8:], key)
+	copy(rowBuf[8+len(key):], val)
+
+	bytesWritten, err := s.rawBlockBuffer.Write(rowBuf)
 	if err != nil {
 		return fmt.Errorf("error in s.blockWriter.Write (zstd=%t, lz4=%t): %w", useZSTD, useLZ4, err)
 	}
@@ -87,7 +95,9 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 		return nil
 	}
 
-	if remainder := s.currentBlockSize % 4096; remainder > 0 {
+	// Otherwise we tripped the block threshold and need to flush the data block
+
+	if remainder := s.currentBlockSize % s.options.dataBlockSize; remainder > 0 {
 		// write the (padded min) multiple of 4k block to the file after compression
 		bytesWritten, err = s.rawBlockBuffer.Write(make([]byte, remainder))
 		if err != nil {
@@ -98,7 +108,7 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 		}
 	}
 
-	// todo flush the block
+	// todo flush the block to the data writer(s) (s3, local file)
 	// todo update the current block offset and clear writer and buffer
 	// todo write the metadata to memory for the block start
 	// reset the block writer
