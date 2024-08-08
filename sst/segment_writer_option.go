@@ -35,3 +35,10 @@ func WriterUseNewBloomFilter(items uint, falsePositiveRate float64) SegmentWrite
 		writer.bloomFilter = bloom.NewWithEstimates(items, falsePositiveRate)
 	}
 }
+
+// WriterDataBlockThreshold sets the block interval, which is the low threshold
+func WriterDataBlockThreshold(thresholdBytes int) SegmentWriterOption {
+	return func(writer *SegmentWriter) {
+		writer.dataBlockThresholdBytes = thresholdBytes
+	}
+}

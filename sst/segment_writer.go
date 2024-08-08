@@ -20,6 +20,8 @@ type SegmentWriter struct {
 	lastBlockKey   []byte
 	bloomFilter    *bloom.BloomFilter
 
+	dataBlockThresholdBytes int
+
 	// options
 	localCacheDir        *string
 	zstdCompressionLevel int // if not 0, then use this
@@ -33,7 +35,8 @@ type SegmentWriter struct {
 // A segment writer can never be reused.
 func NewSegmentWriter(path string, opts ...SegmentWriterOption) SegmentWriter {
 	sw := SegmentWriter{
-		rawBlockBuffer: bytes.Buffer{},
+		rawBlockBuffer:          bytes.Buffer{},
+		dataBlockThresholdBytes: 4096,
 	}
 	for _, opt := range opts {
 		opt(&sw)
@@ -84,13 +87,13 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 		s.bloomFilter.Add(key)
 	}
 
-	if s.currentBlockOffset < 4096 {
+	if s.currentBlockOffset < s.dataBlockThresholdBytes {
 		// todo what ever is needed to continue if anything
 		return nil
 	}
 
 	// todo write the (padded min) multiple of 4k block to the file
-	// todo flush the block once 4k is tripped
+	// todo flush the block
 	// todo update the current block offset and clear writer and buffer
 	// todo write the metadata to memory for the block start
 	// reset the block writer
