@@ -77,8 +77,12 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 		} else {
 			s.blockWriter = s.externalWriter
 		}
+
+		// Ensure we are at a base state
 		s.currentBlockStartKey = key
 		s.currentBlockSize = 0
+		s.currentBlockOffset = 0
+		s.rawBlockBuffer = bytes.Buffer{}
 	}
 
 	// update the key tracking for final write
@@ -122,12 +126,14 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 	}
 
 	// todo flush the rawBlockBuffer to the blockWriter (writes to flush writer)
+	if useZSTD || useLZ4 {
+		// if not compressed, then we've already written to the external writer
+		// todo write to flush external writer
+	}
 	// todo write the metadata to memory for the block start with offset and first key
 
-	// reset block writing state
-	s.currentBlockOffset = 0
+	// reset block writing state, other state will get reset when this is initialized
 	s.blockWriter = nil
-	s.rawBlockBuffer = bytes.Buffer{}
 	panic("todo")
 }
 
