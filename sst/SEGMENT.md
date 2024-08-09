@@ -2,10 +2,10 @@
 
 ## Data block format
 
-Data blocks have the following format (repeated)
+Data blocks have the following format (bytes, repeated)
 
-| key length (uint32) | value length (uint32 | key | value |
-|---------------------|----------------------|-----|-------|
+| key length (uint16) | value length (uint32) | key | value |
+|---------------------|-----------------------|-----|-------|
 
 This formatting occurs before compression.
 

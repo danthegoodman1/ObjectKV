@@ -17,6 +17,9 @@ type SegmentWriter struct {
 	rawBlockBuffer bytes.Buffer
 	blockWriter    io.Writer
 
+	// writes to actual destination (S3 &/ file)
+	externalWriter io.Writer
+
 	// index of (firstKey, (startOffset, compressed size, decompressed size))
 	blockIndex any // todo, either a tree or https://github.com/wk8/go-ordered-map
 	lastKey    []byte
@@ -29,10 +32,11 @@ type SegmentWriter struct {
 // NewSegmentWriter creates a new segment writer and opens the file(s) for writing.
 //
 // A segment writer can never be reused.
-func NewSegmentWriter(path string, opts SegmentWriterOptions) SegmentWriter {
+func NewSegmentWriter(path string, writer io.Writer, opts SegmentWriterOptions) SegmentWriter {
 	sw := SegmentWriter{
 		rawBlockBuffer: bytes.Buffer{},
 		options:        opts,
+		externalWriter: writer,
 	}
 
 	return sw
@@ -56,13 +60,13 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 		// create the writer if it doesn't exist, using the correct writer based on compression
 		// todo check lz4 compression
 		if useZSTD {
-			enc, err := zstd.NewWriter(&s.rawBlockBuffer)
+			enc, err := zstd.NewWriter(s.externalWriter)
 			if err != nil {
 				return fmt.Errorf("error in zstd.NewWriter: %w", err)
 			}
 			s.blockWriter = enc
 		} else {
-			s.blockWriter = &s.rawBlockBuffer
+			s.blockWriter = s.externalWriter
 		}
 		s.currentBlockStartKey = key
 		s.currentBlockSize = 0
@@ -72,9 +76,9 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 	s.lastKey = key
 
 	// write the row for the current block into the buffer
-	rowBuf := make([]byte, 8+len(key)+len(val))
-	binary.LittleEndian.PutUint32(rowBuf[0:4], uint32(len(key)))
-	binary.LittleEndian.PutUint32(rowBuf[4:8], uint32(len(key)))
+	rowBuf := make([]byte, 6+len(key)+len(val))
+	binary.LittleEndian.PutUint16(rowBuf[0:2], uint16(len(key)))
+	binary.LittleEndian.PutUint32(rowBuf[2:6], uint32(len(key)))
 	copy(rowBuf[8:], key)
 	copy(rowBuf[8+len(key):], val)
 
@@ -108,7 +112,7 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 		}
 	}
 
-	// todo flush the rawBlockBuffer to the data writer(s) (s3, local file)
+	// todo flush the rawBlockBuffer to the blockWriter (writes to flush writer)
 	// todo write the metadata to memory for the block start with offset and first key
 
 	// reset block writing state
