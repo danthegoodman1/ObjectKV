@@ -15,4 +15,4 @@ After a row write to the io.Writer (with optional compression), the size is eval
 
 Keys have a size limit of 65,535 (max uint16) bytes, values have a size limit of 4,294,967,295 (max uint32) bytes.
 
-In reality, a developer should implement far lower limits (e.g. max key 1KB, max val 4-96KB).
+In reality, a developer should implement far lower limits (e.g. max key 512B, max val 16KB).
