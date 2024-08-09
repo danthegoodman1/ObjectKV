@@ -68,12 +68,33 @@ bloom filter bytes
 
 ## Reading a Segment file
 
+Reading a segment file is done via the `SegmentReader`, which is safe to reuse for the same segment file, but is not thread safe.
+
 Much like reading a parquet file, reading a segment file can take multiple io operations:
 1. Read the last 8 bytes (uint64) to get the metadata start offset
 2. Read the metadata block to find the data block your key may reside in
 3. Read the data block
 
 This is expensive, so like many solutions such as ClickHouse and RocksDB, the metadata for a segment file should be loaded into memory on boot.
+
+The way to accomplish this is the following on boot:
+
+```
+// on boot
+r := NewSegmentReader()
+err := r.Open()
+metadata, err := r.FetchAndLoadMetadata()
+```
+
+Then subsequent uses:
+
+```
+r := NewSegmentReader()
+r.LoadCachedMetadata(cachedMetadata)
+row, err := r.GetRow([]byte("hey"))
+```
+
+For convenience all methods that require metadata (e.g. `GetRow`, `GetRange`) will automatically load the metadata into the reader if it does not already exist, in case you intend to do a read without caching the metadata.
 
 ### Reading data blocks
 
