@@ -8,7 +8,7 @@ data block 2
 ...
 data block n
 meta block
-byte offset where meta block starts (uint64)
+uint64 byte offset where meta block starts
 ```
 
 ## Data block format
@@ -40,14 +40,18 @@ block index/partitioned block index
 uint8 whether no bloom filter, bloom filter, or partitioned bloom filter (not implemented)
 [bloom filter block]
 uint8 compression info (none, zstd, lz4)
-uint16 first key
-uint16 last key
+uint16 last key length
+last key bytes
 ```
 
 ## Block index format
 
 ### Single block index format
 
+```
+uint16 block first key value
+uint64 block start offset
+```
 
 ### Partitioned block index format (not implemented)
 
@@ -61,3 +65,9 @@ bloom filter bytes
 ### Single bloom filter
 
 ### Partitioned bloom filter format (not implemented)
+
+## Reading a Segment file
+
+Reading a data block can take 1-2 buffer allocations:
+1. Raw block buffer
+2. Compressed block buffer (if block compressed, we need to load the compressed block and decompress to the raw block buffer for reading)

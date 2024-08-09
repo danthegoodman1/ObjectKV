@@ -5,8 +5,8 @@ import "github.com/bits-and-blooms/bloom"
 type SegmentWriterOptions struct {
 	bloomFilter *bloom.BloomFilter
 
-	dataBlockThresholdBytes int
-	dataBlockSize           int
+	dataBlockThresholdBytes uint64
+	dataBlockSize           uint64
 	// if provided, will also write the segment to a local directory. Write will abort if local OR remote fails.
 	localCacheDir *string
 

@@ -16,6 +16,7 @@ require (
 	github.com/UltimateTournament/backoff/v4 v4.2.1 // indirect
 	github.com/bits-and-blooms/bloom v2.0.3+incompatible // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
+	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cockroachdb/cockroach-go/v2 v2.3.5 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
