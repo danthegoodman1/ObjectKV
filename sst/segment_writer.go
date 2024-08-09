@@ -1,7 +1,6 @@
 package sst
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -10,34 +9,41 @@ import (
 	"math"
 )
 
-type SegmentWriter struct {
-	currentBlockSize     int
-	currentBlockOffset   int
-	currentBlockStartKey []byte
-	// Block buffer depends on compression setting
-	rawBlockBuffer bytes.Buffer
-	blockWriter    io.Writer
+type (
+	SegmentWriter struct {
+		currentBlockSize     int
+		currentRawBlockSize  int
+		currentBlockOffset   int
+		currentBlockStartKey []byte
+		blockWriter          io.Writer
 
-	// writes to actual destination (S3 &/ file)
-	externalWriter io.Writer
+		// writes to actual destination (S3 &/ file)
+		externalWriter io.Writer
 
-	// index of (firstKey, (startOffset, compressed size, decompressed size))
-	blockIndex any // todo, either a tree or https://github.com/wk8/go-ordered-map
-	lastKey    []byte
+		// index of (firstKey, (startOffset, compressed size, decompressed size))
+		blockIndex map[[math.MaxUint16]byte]blockStat // todo, either a tree or https://github.com/wk8/go-ordered-map
+		lastKey    []byte
 
-	options SegmentWriterOptions
+		options SegmentWriterOptions
 
-	closed bool
-}
+		closed bool
+	}
+
+	blockStat struct {
+		offset         int
+		rawSize        int // raw size needed for loading into mem (post compression)
+		compressedSize int // 0 if not compressed
+	}
+)
 
 // NewSegmentWriter creates a new segment writer and opens the file(s) for writing.
 //
-// A segment writer can never be reused.
+// A segment writer can never be reused, and is not thread safe.
 func NewSegmentWriter(path string, writer io.Writer, opts SegmentWriterOptions) SegmentWriter {
 	sw := SegmentWriter{
-		rawBlockBuffer: bytes.Buffer{},
 		options:        opts,
 		externalWriter: writer,
+		blockIndex:     map[[math.MaxUint16]byte]blockStat{},
 	}
 
 	return sw
@@ -66,6 +72,12 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 	useZSTD := s.options.zstdCompressionLevel > 0
 	useLZ4 := !useZSTD && s.options.lz4Compression
 	if s.blockWriter == nil {
+		// Ensure we are at a base state
+		s.currentBlockStartKey = key
+		s.currentBlockSize = 0
+		s.currentRawBlockSize = 0
+		s.currentBlockOffset = 0
+
 		// create the writer if it doesn't exist, using the correct writer based on compression
 		// todo check lz4 compression
 		if useZSTD {
@@ -75,14 +87,8 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 			}
 			s.blockWriter = enc
 		} else {
-			s.blockWriter = s.externalWriter
+			s.blockWriter = s.externalWriter // just use the external writer directly
 		}
-
-		// Ensure we are at a base state
-		s.currentBlockStartKey = key
-		s.currentBlockSize = 0
-		s.currentBlockOffset = 0
-		s.rawBlockBuffer = bytes.Buffer{}
 	}
 
 	// update the key tracking for final write
@@ -95,58 +101,78 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 	copy(rowBuf[8:], key)
 	copy(rowBuf[8+len(key):], val)
 
-	bytesWritten, err := s.rawBlockBuffer.Write(rowBuf)
+	bytesWritten, err := s.blockWriter.Write(rowBuf)
 	if err != nil {
 		return fmt.Errorf("error in s.blockWriter.Write (zstd=%t, lz4=%t): %w", useZSTD, useLZ4, err)
 	}
 	s.currentBlockOffset += bytesWritten
 	s.currentBlockSize += bytesWritten
+	s.currentRawBlockSize += len(rowBuf)
 
 	if s.options.bloomFilter != nil {
 		// store the row in the bloom filter if needed
 		s.options.bloomFilter.Add(key)
 	}
 
-	if s.currentBlockOffset < s.options.dataBlockThresholdBytes {
-		// todo what ever is needed to continue if anything
-		return nil
+	if s.currentBlockOffset >= s.options.dataBlockThresholdBytes {
+		err = s.finishCurrentDataBlock()
+		if err != nil {
+			return fmt.Errorf("error in finishCurrentDataBlock: %w", err)
+		}
 	}
 
-	// Otherwise we tripped the block threshold and need to flush the data block
+	return nil
+}
+
+func (s *SegmentWriter) finishCurrentDataBlock() error {
+	useZSTD := s.options.zstdCompressionLevel > 0
+	useLZ4 := !useZSTD && s.options.lz4Compression
 
 	if remainder := s.currentBlockSize % s.options.dataBlockSize; remainder > 0 {
 		// write the (padded min) multiple of 4k block to the file after compression
-		bytesWritten, err = s.rawBlockBuffer.Write(make([]byte, remainder))
+		bytesWritten, err := s.externalWriter.Write(make([]byte, remainder))
 		if err != nil {
-			return fmt.Errorf("error writing padding to rawBlockBuffer: %w", err)
+			return fmt.Errorf("error writing padding to externalWriter: %w", err)
 		}
 		if bytesWritten != remainder {
 			return fmt.Errorf("%w - expected=%d wrote=%d", ErrUnexpectedBytesWritten, remainder, bytesWritten)
 		}
 	}
 
-	// todo flush the rawBlockBuffer to the blockWriter (writes to flush writer)
-	if useZSTD || useLZ4 {
-		// if not compressed, then we've already written to the external writer
-		// todo write to flush external writer
+	// write the metadata to memory for the block start with offset and first key
+	stat := blockStat{
+		offset:  s.currentBlockOffset,
+		rawSize: s.currentRawBlockSize,
 	}
-	// todo write the metadata to memory for the block start with offset and first key
+	if useZSTD || useLZ4 {
+		stat.compressedSize = s.currentBlockSize
+	}
+	s.blockIndex[[math.MaxUint16]byte(s.currentBlockStartKey)] = stat
 
-	// reset block writing state, other state will get reset when this is initialized
+	// reset the block writer, block stats will get reset when a new blockWriter is created
 	s.blockWriter = nil
-	panic("todo")
+
+	return nil
 }
 
 // Close finishes writing the segment file by writing the final metadata to the file and closing the writer.
 //
 // Once this has completed then the segment is considered durably stored.
 func (s *SegmentWriter) Close() error {
+	// flush the current block if needed
+	if s.blockWriter != nil {
+		err := s.finishCurrentDataBlock()
+		if err != nil {
+			return fmt.Errorf("error in finishCurrentDataBlock: %w", err)
+		}
+	}
+
 	// todo write the block index
 	// todo write the bloom filter if using it
 	// todo record the first and last value of the file
-	// todo write the offset for where in the file the metadata starts
-	// todo close the remote file
-	// todo close the cached file if exists
+	// todo write the offset for where in the file the metadata starts (uint64)
+
+	// close the writer so it can't be reused
 	s.closed = true
 	panic("todo")
 }
