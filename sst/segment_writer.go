@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/klauspost/compress/zstd"
 	"io"
+	"math"
 )
 
 type SegmentWriter struct {
@@ -45,12 +46,20 @@ func NewSegmentWriter(path string, writer io.Writer, opts SegmentWriterOptions) 
 var (
 	ErrWriterClosed           = errors.New("segment writer already closed")
 	ErrUnexpectedBytesWritten = errors.New("unexpected number of bytes written")
+	ErrKeyTooLarge            = errors.New("key too large, must be <= max uint16 bytes")
+	ErrValueTooLarge          = errors.New("value too large, must be <= max uin32 bytes")
 )
 
 // WriteRow writes a given row to the segment. Cannot write after the writer is closed.
 //
 // It is expected that rows are written in order.
 func (s *SegmentWriter) WriteRow(key, val []byte) error {
+	if len(key) > math.MaxUint16 {
+		return fmt.Errorf("%w, got length %d", ErrKeyTooLarge, len(key))
+	}
+	if len(val) > math.MaxUint32 {
+		return fmt.Errorf("%w, got length %d", ErrValueTooLarge, len(val))
+	}
 	if s.closed {
 		return ErrWriterClosed
 	}
