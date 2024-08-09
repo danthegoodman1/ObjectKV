@@ -14,19 +14,25 @@ func init() {
 	backgroundCacheLockMap = syncx.NewMapPtr[string, bool]()
 }
 
-type SegmentReader struct {
-	rowIterBlockOffset int
+type (
+	SegmentReader struct {
+		rowIterBlockOffset int
 
-	bloomFilter *bloom.BloomFilter
+		metadata segmentMetadata
 
-	firstKey []byte // todo
-	lastKey  []byte // todo
+		// options
+		options SegmentReaderOptions
+	}
 
-	blockIndex any // todo map of (start, (offset, size))
+	segmentMetadata struct {
+		bloomFilter *bloom.BloomFilter
 
-	// options
-	options SegmentReaderOptions
-}
+		firstKey []byte // todo
+		lastKey  []byte // todo
+
+		blockIndex any // todo map of (start, (offset, size))
+	}
+)
 
 func NewSegmentReader(opts SegmentReaderOptions) SegmentReader {
 	sr := SegmentReader{
@@ -39,14 +45,14 @@ func NewSegmentReader(opts SegmentReaderOptions) SegmentReader {
 // Open will open a segment file for reading. Automatically will read from the locally cached file if it exists at the
 // localPath.
 //
-// Will start reading and load the metadata in. If you already have the metadata, see OpenWithMetadata
+// Will start reading and load the metadata in if not already provided.
 func (s *SegmentReader) Open() error {
 	// TODO in goroutine grab background cache lock? maybe this can be package local since files are immutable
 	panic("todo")
 }
 
-// OpenWithMetadata opens the file for reading with cached metadata
-func (s *SegmentReader) OpenWithMetadata(metadata any) error {
+// LoadMetadata will load the metadata from the file it not already held in the reader, then returns it (for caching).
+func (s *SegmentReader) LoadMetadata() (*segmentMetadata, error) {
 	panic("todo")
 }
 
