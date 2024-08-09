@@ -1,11 +1,26 @@
 # Segment Format
 
+The top-level segment format looks like:
+
+```
+data block 1
+data block 2
+...
+data block n
+meta block
+byte offset where meta block starts (uint64)
+```
+
 ## Data block format
 
 Data blocks have the following format (bytes, repeated)
 
-| key length (uint16) | value length (uint32) | key | value |
-|---------------------|-----------------------|-----|-------|
+```
+uint16 key length
+uint32 value length
+key bytes
+value bytes
+```
 
 This formatting occurs before compression.
 
@@ -16,3 +31,15 @@ After a row write to the io.Writer (with optional compression), the size is eval
 Keys have a size limit of 65,535 (max uint16) bytes, values have a size limit of 4,294,967,295 (max uint32) bytes.
 
 In reality, a developer should implement far lower limits (e.g. max key 512B, max val 16KB).
+
+## Meta block format
+
+```
+uint8 single or partitioned block index (not implemented)
+block index/partitioned block index
+uint8 whether no bloom filter, bloom filter, or partitioned bloom filter (not implemented)
+[bloom filter]
+uint8 compression info (none, zstd, lz4)
+uint16 first key
+uint16 last key
+```
