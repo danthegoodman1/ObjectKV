@@ -35,7 +35,7 @@ type (
 // NewSegmentWriter creates a new segment writer and opens the file(s) for writing.
 //
 // A segment writer can never be reused, and is not thread safe.
-func NewSegmentWriter(path string, writer io.Writer, opts SegmentWriterOptions) SegmentWriter {
+func NewSegmentWriter(writer io.Writer, opts SegmentWriterOptions) SegmentWriter {
 	sw := SegmentWriter{
 		options:        opts,
 		externalWriter: writer,

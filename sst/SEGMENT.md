@@ -101,3 +101,26 @@ For convenience all methods that require metadata (e.g. `GetRow`, `GetRange`) wi
 Reading a data block can take 1-2 buffer allocations:
 1. Raw block buffer
 2. Compressed block buffer (if block compressed, we need to load the compressed block and decompress to the raw block buffer for reading)
+
+## Writing a Segment file
+
+Writing is done via the `SegmentWriter` which handles block formation, serialization, and more. Segment writers are single-user per-file.
+
+```
+w := NewSegmentWriter()
+err := w.WriteRow()
+// ... write more rows
+err := w.Close()
+```
+
+Writing rows is expected to be in order, as the writer is optimized for performance and a low memory footprint.
+
+You must always `.Close()` the segment file.
+
+Any errors that are thrown during `WriteRow` or `Close` are NON-RECOVERABLE. This is because stats are collected before a block is fully flushed (e.g. to an S3 writer), so a block cannot be retried via the Segment writer.
+
+The safest option is to just abort the write and throw away the writer.
+
+If you are using a fan-out external writer (e.g. writing to S3 and local cache), ensure that you clean up any files and properly abort S3 writes.
+
+Additionally, if you are retrying to write a segment file by using a new writer, it's greatly advised to use a unique file name for every `SegmentWriter`.
