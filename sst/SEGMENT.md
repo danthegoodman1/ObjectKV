@@ -68,6 +68,15 @@ bloom filter bytes
 
 ## Reading a Segment file
 
+Much like reading a parquet file, reading a segment file can take multiple io operations:
+1. Read the last 8 bytes (uint64) to get the metadata start offset
+2. Read the metadata block to find the data block your key may reside in
+3. Read the data block
+
+This is expensive, so like many solutions such as ClickHouse and RocksDB, the metadata for a segment file should be loaded into memory on boot.
+
+### Reading data blocks
+
 Reading a data block can take 1-2 buffer allocations:
 1. Raw block buffer
 2. Compressed block buffer (if block compressed, we need to load the compressed block and decompress to the raw block buffer for reading)

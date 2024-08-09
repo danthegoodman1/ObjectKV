@@ -2,6 +2,7 @@ package sst
 
 import (
 	"errors"
+	"github.com/bits-and-blooms/bloom"
 	"github.com/danthegoodman1/objectkv/syncx"
 )
 
@@ -16,7 +17,7 @@ func init() {
 type SegmentReader struct {
 	rowIterBlockOffset int
 
-	bloomFilter any // todo
+	bloomFilter *bloom.BloomFilter
 
 	firstKey []byte // todo
 	lastKey  []byte // todo
@@ -38,9 +39,14 @@ func NewSegmentReader(opts SegmentReaderOptions) SegmentReader {
 // Open will open a segment file for reading. Automatically will read from the locally cached file if it exists at the
 // localPath.
 //
-// It will also read in the metadata of the segment for subsequent operations.
-func (s *SegmentReader) Open(path string) error {
+// Will start reading and load the metadata in. If you already have the metadata, see OpenWithMetadata
+func (s *SegmentReader) Open() error {
 	// TODO in goroutine grab background cache lock? maybe this can be package local since files are immutable
+	panic("todo")
+}
+
+// OpenWithMetadata opens the file for reading with cached metadata
+func (s *SegmentReader) OpenWithMetadata(metadata any) error {
 	panic("todo")
 }
 
