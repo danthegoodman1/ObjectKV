@@ -22,8 +22,8 @@ type (
 		// writes to actual destination (S3 &/ file)
 		externalWriter io.Writer
 
-		currentByteOffset uint64                             // where we are in the file currently, used for block index
-		blockIndex        map[[math.MaxUint16]byte]blockStat // todo, either a tree or https://github.com/wk8/go-ordered-map
+		currentByteOffset uint64      // where we are in the file currently, used for block index
+		blockIndex        []blockStat // todo, either a tree or https://github.com/wk8/go-ordered-map
 		lastKey           []byte
 
 		options SegmentWriterOptions
@@ -39,7 +39,7 @@ func NewSegmentWriter(writer io.Writer, opts SegmentWriterOptions) SegmentWriter
 	sw := SegmentWriter{
 		options:        opts,
 		externalWriter: writer,
-		blockIndex:     map[[math.MaxUint16]byte]blockStat{},
+		blockIndex:     []blockStat{},
 	}
 
 	return sw
@@ -50,6 +50,7 @@ var (
 	ErrUnexpectedBytesWritten = errors.New("unexpected number of bytes written")
 	ErrKeyTooLarge            = errors.New("key too large, must be <= max uint16 bytes")
 	ErrValueTooLarge          = errors.New("value too large, must be <= max uin32 bytes")
+	ErrNoRows                 = errors.New("no rows were written, can't have an empty segment file")
 )
 
 // WriteRow writes a given row to the segment. Cannot write after the writer is closed.
@@ -154,11 +155,12 @@ func (s *SegmentWriter) flushCurrentDataBlock() error {
 		offset:   s.currentByteOffset,
 		rawBytes: s.currentRawBlockSize,
 		hash:     blockHash,
+		firstKey: s.currentBlockStartKey,
 	}
 	if useZSTD || useLZ4 {
 		stat.compressedBytes = s.currentBlockSize
 	}
-	s.blockIndex[[math.MaxUint16]byte(s.currentBlockStartKey)] = stat
+	s.blockIndex = append(s.blockIndex, stat)
 
 	// reset the block writer, block stats will get reset when a new blockWriter is created
 	s.blockWriter = nil
@@ -180,6 +182,10 @@ func (s *SegmentWriter) Close() (uint64, error) {
 		}
 	}
 
+	if len(s.blockIndex) == 0 {
+		return 0, ErrNoRows
+	}
+
 	// write the meta block
 	metaBlockBytes := s.generateMetaBlock()
 	bytesWritten, err := s.externalWriter.Write(metaBlockBytes)
@@ -192,13 +198,7 @@ func (s *SegmentWriter) Close() (uint64, error) {
 	s.currentByteOffset += uint64(bytesWritten)
 	metaBlockStartOffset := s.currentByteOffset
 
-	// write the first and last value of the file
-	finalSegmentBytes := make([]byte, 2+len(s.lastKey)+8) // uint16 last key length + last key bytes + meta block start offset
-	binary.LittleEndian.PutUint16(finalSegmentBytes[0:2], uint16(len(s.lastKey)))
-	copy(finalSegmentBytes[2:], s.lastKey)
-	binary.LittleEndian.PutUint64(finalSegmentBytes[2+len(s.lastKey):], metaBlockStartOffset)
-
-	bytesWritten, err = s.externalWriter.Write(finalSegmentBytes)
+	bytesWritten, err = s.externalWriter.Write(binary.LittleEndian.AppendUint64([]byte{}, metaBlockStartOffset))
 	if err != nil {
 		return 0, fmt.Errorf("error writing final segment bytes to external writer: %w", err)
 	}
@@ -214,9 +214,35 @@ func (s *SegmentWriter) Close() (uint64, error) {
 }
 
 func (s *SegmentWriter) generateMetaBlock() []byte {
-	// todo write the block index type and block index
-	// todo write the bloom filter type and bloom filter (if using it)
-	panic("todo")
+	var metaBlock bytes.Buffer
+
+	// write 0 byte to indicate not a partitioned block index
+	metaBlock.Write([]byte{0})
+
+	// write the block index type and block index
+	for _, block := range s.blockIndex {
+		metaBlock.Write(block.toBytes())
+	}
+
+	// write the bloom filter type and bloom filter (if using it)
+	if s.options.bloomFilter != nil {
+		metaBlock.Write([]byte{1}) // using bloom filter
+		var bloomBuffer bytes.Buffer
+		s.options.bloomFilter.WriteTo(&bloomBuffer)
+		metaBlock.Write(binary.LittleEndian.AppendUint64([]byte{}, uint64(bloomBuffer.Len()))) // write byte length
+		metaBlock.Write(bloomBuffer.Bytes())                                                   // write bloom filter
+	} else {
+		metaBlock.Write([]byte{0}) // not using bloom filter
+	}
+
+	// write the first and last key
+	firstKey := s.blockIndex[0].firstKey
+	metaBlock.Write(binary.LittleEndian.AppendUint16([]byte{}, uint16(len(firstKey))))
+	metaBlock.Write(firstKey)
+	metaBlock.Write(binary.LittleEndian.AppendUint16([]byte{}, uint16(len(s.lastKey))))
+	metaBlock.Write(s.lastKey)
+
+	return metaBlock.Bytes()
 }
 
 func (s *SegmentWriter) generateBlockIndex() []byte {

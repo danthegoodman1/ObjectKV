@@ -30,7 +30,7 @@ type (
 		firstKey []byte // todo
 		lastKey  []byte // todo
 
-		blockIndex any // todo map of (start, (offset, size))
+		blockIndex any // todo map/array of (start, (blockStat))
 	}
 )
 

@@ -36,10 +36,11 @@ In reality, a developer should implement far lower limits (e.g. max key 512B, ma
 
 ```
 uint8 single or partitioned block index (not implemented)
-block index/partitioned block index
-uint8 whether no bloom filter, bloom filter, or partitioned bloom filter (not implemented)
-[bloom filter block]
+block index/partitioned block index (0,1)
+bloom filter block
 uint8 compression info (none, zstd, lz4)
+uint16 first key length
+first key bytes
 uint16 last key length
 last key bytes
 ```
@@ -49,8 +50,13 @@ last key bytes
 ### Single block index format
 
 ```
-uint16 block first key value
+uint64 length of this block
+uint16 block first key length
+key bytes
 uint64 block start offset
+uint64 block raw bytes length
+uint64 block compressed bytes length (0 if not compressed)
+uint64 block hash (post compression)
 ```
 
 ### Partitioned block index format (not implemented)
@@ -58,7 +64,8 @@ uint64 block start offset
 ## Bloom filter block format
 
 ```
-uint64 size of bloom filter
+uint8 whether no bloom filter, bloom filter, or partitioned bloom filter (not implemented) (0,1,2)
+uint64 byte length of bloom filter
 bloom filter bytes
 ```
 
