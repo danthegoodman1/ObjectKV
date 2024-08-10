@@ -11,9 +11,14 @@ data block 2
 data block n
 meta block
 uint64 byte offset where meta block starts
+uint64 meta block hash
 uint8 segment file version
 ```
-Meta block byte length can be interpolated by: file size - offset - 9, or read as `fileBytes[offset:length-9]`.
+Meta block byte length can be interpolated by: file size - offset - 17, or read as `fileBytes[offset:length-17]`.
+
+The meta block hash is used for the reader to verify that it is reading a valid segment file, and the metadata has not been corrupted
+
+All versions will have the final 17 bytes of offset, hash, version (at least for the first 256 versions).
 
 ## Data block format
 

@@ -208,7 +208,17 @@ func (s *SegmentWriter) Close() (uint64, error) {
 	// Write the meta block offset
 	bytesWritten, err = s.externalWriter.Write(binary.LittleEndian.AppendUint64([]byte{}, metaBlockStartOffset))
 	if err != nil {
-		return 0, fmt.Errorf("error writing final segment bytes to external writer: %w", err)
+		return 0, fmt.Errorf("error writing meta block offset to external writer: %w", err)
+	}
+	if bytesWritten != 8 {
+		return 0, fmt.Errorf("%w (meta block offset) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, len(metaBlockBytes), bytesWritten)
+	}
+	s.currentByteOffset += uint64(bytesWritten)
+
+	// Write the meta block hash
+	bytesWritten, err = s.externalWriter.Write(binary.LittleEndian.AppendUint64([]byte{}, xxhash.Sum64(metaBlockBytes)))
+	if err != nil {
+		return 0, fmt.Errorf("error writing block hash bytes to external writer: %w", err)
 	}
 	if bytesWritten != 8 {
 		return 0, fmt.Errorf("%w (meta block offset) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, len(metaBlockBytes), bytesWritten)
