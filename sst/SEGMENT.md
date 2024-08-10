@@ -1,5 +1,7 @@
 # Segment Format
 
+All numbers are encoded as little endian.
+
 The top-level segment format looks like:
 
 ```
