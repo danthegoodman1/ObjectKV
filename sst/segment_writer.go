@@ -13,7 +13,6 @@ import (
 
 type (
 	SegmentWriter struct {
-		currentBlockSize     uint64
 		currentRawBlockSize  uint64
 		currentBlockStartKey []byte
 		blockBuffer          *bytes.Buffer // the buffer for the (un)compressed block
@@ -66,19 +65,18 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 	if s.closed {
 		return ErrWriterClosed
 	}
-	useZSTD := s.options.zstdCompressionLevel > 0
-	useLZ4 := !useZSTD && s.options.lz4Compression
+	useZSTD := s.options.ZSTDCompressionLevel > 0
+	useLZ4 := !useZSTD && s.options.LZ4Compression
 	if s.blockWriter == nil {
 		// Ensure we are at a base state
 		s.currentBlockStartKey = key
-		s.currentBlockSize = 0
 		s.currentRawBlockSize = 0
 		s.blockBuffer = &bytes.Buffer{}
 
 		// create the writer if it doesn't exist, using the correct writer based on compression
 		// todo check lz4 compression
 		if useZSTD {
-			enc, err := zstd.NewWriter(s.blockBuffer)
+			enc, err := zstd.NewWriter(s.blockBuffer, zstd.WithEncoderLevel(zstd.EncoderLevel(s.options.ZSTDCompressionLevel)))
 			if err != nil {
 				return fmt.Errorf("error in zstd.NewWriter: %w", err)
 			}
@@ -94,23 +92,22 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 	// write the row for the current block into the buffer
 	rowBuf := make([]byte, 6+len(key)+len(val))
 	binary.LittleEndian.PutUint16(rowBuf[0:2], uint16(len(key)))
-	binary.LittleEndian.PutUint32(rowBuf[2:6], uint32(len(key)))
-	copy(rowBuf[8:], key)
-	copy(rowBuf[8+len(key):], val)
+	binary.LittleEndian.PutUint32(rowBuf[2:6], uint32(len(val)))
+	copy(rowBuf[6:], key)
+	copy(rowBuf[6+len(key):], val)
 
-	bytesWritten, err := s.blockWriter.Write(rowBuf)
+	_, err := s.blockWriter.Write(rowBuf)
 	if err != nil {
 		return fmt.Errorf("error in s.blockWriter.Write (zstd=%t, lz4=%t): %w", useZSTD, useLZ4, err)
 	}
-	s.currentBlockSize += uint64(bytesWritten)
 	s.currentRawBlockSize += uint64(len(rowBuf))
 
-	if s.options.bloomFilter != nil {
+	if s.options.BloomFilter != nil {
 		// store the row in the bloom filter if needed
-		s.options.bloomFilter.Add(key)
+		s.options.BloomFilter.Add(key)
 	}
 
-	if s.currentBlockSize >= s.options.dataBlockThresholdBytes {
+	if uint64(s.blockBuffer.Len()) >= s.options.DataBlockThresholdBytes {
 		err = s.flushCurrentDataBlock()
 		if err != nil {
 			return fmt.Errorf("error in flushCurrentDataBlock: %w", err)
@@ -121,10 +118,20 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 }
 
 func (s *SegmentWriter) flushCurrentDataBlock() error {
-	useZSTD := s.options.zstdCompressionLevel > 0
-	useLZ4 := !useZSTD && s.options.lz4Compression
+	useZSTD := s.options.ZSTDCompressionLevel > 0
+	useLZ4 := !useZSTD && s.options.LZ4Compression
 
-	if remainder := s.currentBlockSize % s.options.dataBlockSize; remainder > 0 {
+	if zstdEncoder, ok := s.blockWriter.(*zstd.Encoder); ok {
+		fmt.Println("closing zstd encoder")
+		err := zstdEncoder.Close()
+		if err != nil {
+			return fmt.Errorf("error in zstdEncode.Close(): %w", err)
+		}
+	}
+
+	fmt.Println("Raw bytes", s.currentRawBlockSize, "compressed", s.blockBuffer.Len())
+
+	if remainder := s.options.DataBlockSize - uint64(s.blockBuffer.Len())%s.options.DataBlockSize; remainder > 0 {
 		// write the (padded min) multiple of 4k block to the file after compression
 		bytesWritten, err := s.blockBuffer.Write(make([]byte, remainder))
 		if err != nil {
@@ -158,7 +165,7 @@ func (s *SegmentWriter) flushCurrentDataBlock() error {
 		firstKey: s.currentBlockStartKey,
 	}
 	if useZSTD || useLZ4 {
-		stat.compressedBytes = s.currentBlockSize
+		stat.compressedBytes = uint64(s.blockBuffer.Len())
 	}
 	s.blockIndex = append(s.blockIndex, stat)
 
@@ -202,8 +209,8 @@ func (s *SegmentWriter) Close() (uint64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("error writing final segment bytes to external writer: %w", err)
 	}
-	if bytesWritten != len(metaBlockBytes) {
-		return 0, fmt.Errorf("%w (meta block) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, len(metaBlockBytes), bytesWritten)
+	if bytesWritten != 8 {
+		return 0, fmt.Errorf("%w (meta block offset) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, len(metaBlockBytes), bytesWritten)
 	}
 	s.currentByteOffset += uint64(bytesWritten)
 
@@ -225,10 +232,10 @@ func (s *SegmentWriter) generateMetaBlock() []byte {
 	}
 
 	// write the bloom filter type and bloom filter (if using it)
-	if s.options.bloomFilter != nil {
+	if s.options.BloomFilter != nil {
 		metaBlock.Write([]byte{1}) // using bloom filter
 		var bloomBuffer bytes.Buffer
-		s.options.bloomFilter.WriteTo(&bloomBuffer)
+		s.options.BloomFilter.WriteTo(&bloomBuffer)
 		metaBlock.Write(binary.LittleEndian.AppendUint64([]byte{}, uint64(bloomBuffer.Len()))) // write byte length
 		metaBlock.Write(bloomBuffer.Bytes())                                                   // write bloom filter
 	} else {

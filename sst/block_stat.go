@@ -36,8 +36,7 @@ func (bs blockStat) toBytes() []byte {
 	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.hash))
 
 	// prepend with the length of the block and return it
-	var blockLenBytes []byte
-	binary.LittleEndian.PutUint64(blockLenBytes[0:], uint64(blockBytes.Len()))
+	blockLenBytes := binary.LittleEndian.AppendUint64([]byte{}, uint64(blockBytes.Len()))
 
 	return append(blockLenBytes, blockBytes.Bytes()...)
 }

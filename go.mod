@@ -3,7 +3,10 @@ module github.com/danthegoodman1/objectkv
 go 1.22.5
 
 require (
+	github.com/bits-and-blooms/bloom v2.0.3+incompatible
+	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/danthegoodman1/GoAPITemplate v0.0.0-20240713221854-8ccf52c39601
+	github.com/klauspost/compress v1.17.9
 	github.com/rs/zerolog v1.33.0
 	go.opentelemetry.io/otel v1.28.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.28.0
@@ -14,9 +17,7 @@ require (
 
 require (
 	github.com/UltimateTournament/backoff/v4 v4.2.1 // indirect
-	github.com/bits-and-blooms/bloom v2.0.3+incompatible // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
-	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cockroachdb/cockroach-go/v2 v2.3.5 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -28,7 +29,6 @@ require (
 	github.com/jackc/pgtype v1.12.0 // indirect
 	github.com/jackc/pgx/v5 v5.4.3 // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
-	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/labstack/echo/v4 v4.11.1 // indirect
 	github.com/labstack/gommon v0.4.0 // indirect
 	github.com/matoous/go-nanoid/v2 v2.0.0 // indirect
