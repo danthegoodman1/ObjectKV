@@ -205,12 +205,23 @@ func (s *SegmentWriter) Close() (uint64, error) {
 	s.currentByteOffset += uint64(bytesWritten)
 	metaBlockStartOffset := s.currentByteOffset
 
+	// Write the meta block offset
 	bytesWritten, err = s.externalWriter.Write(binary.LittleEndian.AppendUint64([]byte{}, metaBlockStartOffset))
 	if err != nil {
 		return 0, fmt.Errorf("error writing final segment bytes to external writer: %w", err)
 	}
 	if bytesWritten != 8 {
 		return 0, fmt.Errorf("%w (meta block offset) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, len(metaBlockBytes), bytesWritten)
+	}
+	s.currentByteOffset += uint64(bytesWritten)
+
+	// Write the segment file version
+	bytesWritten, err = s.externalWriter.Write([]byte{1})
+	if err != nil {
+		return 0, fmt.Errorf("error writing final segment bytes to external writer: %w", err)
+	}
+	if bytesWritten != 1 {
+		return 0, fmt.Errorf("%w (meta block offset) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, 1, bytesWritten)
 	}
 	s.currentByteOffset += uint64(bytesWritten)
 
@@ -222,9 +233,6 @@ func (s *SegmentWriter) Close() (uint64, error) {
 
 func (s *SegmentWriter) generateMetaBlock() []byte {
 	var metaBlock bytes.Buffer
-
-	// Write the segment version
-	metaBlock.Write([]byte{1})
 
 	// write 0 byte to indicate not a partitioned block index
 	metaBlock.Write([]byte{0})

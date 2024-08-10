@@ -9,7 +9,9 @@ data block 2
 data block n
 meta block
 uint64 byte offset where meta block starts
+uint8 segment file version
 ```
+Meta block byte length can be interpolated by: file size - offset - 9, or read as `fileBytes[offset:length-9]`.
 
 ## Data block format
 
@@ -35,7 +37,6 @@ In reality, a developer should implement far lower limits (e.g. max key 512B, ma
 ## Meta block format
 
 ```
-uint8 segment file version
 uint8 single or partitioned block index (not implemented)
 block index/partitioned block index (0,1)
 bloom filter block
