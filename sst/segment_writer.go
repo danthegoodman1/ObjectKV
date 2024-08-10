@@ -223,6 +223,9 @@ func (s *SegmentWriter) Close() (uint64, error) {
 func (s *SegmentWriter) generateMetaBlock() []byte {
 	var metaBlock bytes.Buffer
 
+	// Write the segment version
+	metaBlock.Write([]byte{1})
+
 	// write 0 byte to indicate not a partitioned block index
 	metaBlock.Write([]byte{0})
 

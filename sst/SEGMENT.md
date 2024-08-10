@@ -35,10 +35,11 @@ In reality, a developer should implement far lower limits (e.g. max key 512B, ma
 ## Meta block format
 
 ```
+uint8 segment file version
 uint8 single or partitioned block index (not implemented)
 block index/partitioned block index (0,1)
 bloom filter block
-uint8 compression info (none, zstd, lz4)
+uint8 compression format (0 none, 1 zstd, 2 lz4)
 uint16 first key length
 first key bytes
 uint16 last key length
