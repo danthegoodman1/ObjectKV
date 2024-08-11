@@ -244,13 +244,15 @@ func (s *SegmentWriter) Close() (uint64, error) {
 func (s *SegmentWriter) generateMetaBlock() []byte {
 	var metaBlock bytes.Buffer
 
+	// write the first and last key
+	firstKey := s.blockIndex[0].firstKey
+	metaBlock.Write(binary.LittleEndian.AppendUint16([]byte{}, uint16(len(firstKey))))
+	metaBlock.Write(firstKey)
+	metaBlock.Write(binary.LittleEndian.AppendUint16([]byte{}, uint16(len(s.lastKey))))
+	metaBlock.Write(s.lastKey)
+
 	// write 0 byte to indicate not a partitioned block index
 	metaBlock.Write([]byte{0})
-
-	// write the block index type and block index
-	for _, block := range s.blockIndex {
-		metaBlock.Write(block.toBytes())
-	}
 
 	// write the bloom filter type and bloom filter (if using it)
 	if s.options.BloomFilter != nil {
@@ -263,12 +265,13 @@ func (s *SegmentWriter) generateMetaBlock() []byte {
 		metaBlock.Write([]byte{0}) // not using bloom filter
 	}
 
-	// write the first and last key
-	firstKey := s.blockIndex[0].firstKey
-	metaBlock.Write(binary.LittleEndian.AppendUint16([]byte{}, uint16(len(firstKey))))
-	metaBlock.Write(firstKey)
-	metaBlock.Write(binary.LittleEndian.AppendUint16([]byte{}, uint16(len(s.lastKey))))
-	metaBlock.Write(s.lastKey)
+	// write the number of block index entries
+	metaBlock.Write(binary.LittleEndian.AppendUint64([]byte{}, uint64(len(s.blockIndex))))
+
+	// write the block index items
+	for _, block := range s.blockIndex {
+		metaBlock.Write(block.toBytes())
+	}
 
 	return metaBlock.Bytes()
 }

@@ -44,14 +44,14 @@ In reality, a developer should implement far lower limits (e.g. max key 512B, ma
 ## Meta block format
 
 ```
-uint8 single or partitioned block index (not implemented) (0,1)
-block index/partitioned block index
-bloom filter block
-uint8 compression format (0 none, 1 zstd, 2 lz4)
 uint16 first key length
 first key bytes
 uint16 last key length
 last key bytes
+uint8 single or partitioned block index (not implemented) (0,1)
+data block index/partitioned data block index
+bloom filter block
+uint8 compression format (0 none, 1 zstd, 2 lz4)
 ```
 
 ## Block index format
@@ -59,13 +59,15 @@ last key bytes
 ### Single block index format
 
 ```
-uint64 length of this block
-uint16 block first key length
-key bytes
-uint64 block start offset
-uint64 block raw bytes length
-uint64 block compressed bytes length (0 if not compressed)
-uint64 block hash (post compression)
+uint64 number of block index entries
+# REPEATED:
+    uint16 block first key length
+    key bytes
+    uint64 block start offset
+    uint64 block raw bytes length
+    uint64 block compressed bytes length (0 if not compressed)
+    uint64 block hash (post compression)
+    ...
 ```
 
 ### Partitioned block index format (not implemented)

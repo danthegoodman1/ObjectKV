@@ -9,6 +9,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/danthegoodman1/objectkv/syncx"
 	"io"
+	"math"
 )
 
 var (
@@ -35,10 +36,10 @@ type (
 	segmentMetadata struct {
 		bloomFilter *bloom.BloomFilter
 
-		firstKey []byte // todo
-		lastKey  []byte // todo
+		firstKey []byte
+		lastKey  []byte
 
-		blockIndex any // todo map/array of (start, (blockStat))
+		blockIndex map[[math.MaxUint16]byte]blockStat
 	}
 )
 
@@ -60,6 +61,7 @@ func (s *SegmentReader) LoadCachedMetadata(metadata *segmentMetadata) {
 var (
 	ErrUnknownSegmentVersion   = errors.New("unknown segment version")
 	ErrMismatchedMetaBlockHash = errors.New("mismatched meta block hash")
+	ErrInvalidMetaBlock        = errors.New("invalid meta block")
 )
 
 // FetchAndLoadMetadata will load the metadata from the file it not already held in the reader, then returns it (for caching).
@@ -109,7 +111,7 @@ func (s *SegmentReader) FetchAndLoadMetadata() (*segmentMetadata, error) {
 	metaReader.Seek(1, io.SeekStart)
 
 	// read the block index according to spec
-	err = s.loadBlockIndex(metaReader, int(binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))))
+	err = s.loadBlockIndex(metaReader)
 	if err != nil {
 		return nil, fmt.Errorf("error in loadBlockIndex: %w", err)
 	}
@@ -117,9 +119,32 @@ func (s *SegmentReader) FetchAndLoadMetadata() (*segmentMetadata, error) {
 	panic("todo")
 }
 
-// loadBlockIndex loads the block index into the SegmentReader's segmentMetadata using the provided metaReader
-func (s *SegmentReader) loadBlockIndex(metaReader *bytes.Reader, blockLength int) error {
-	panic("todo")
+// loadBlockIndex loads the block index into the SegmentReader's segmentMetadata using the provided metaReader.
+//
+// It is assumed that the metaReader is Seeked to the start of the data block index
+func (s *SegmentReader) loadBlockIndex(metaReader *bytes.Reader) error {
+	// read the number of data block index entries
+	numEntries := int(binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8)))
+	if numEntries == 0 {
+		return fmt.Errorf("%w: had no data block entries", ErrInvalidMetaBlock)
+	}
+
+	for i := 0; i < numEntries; i++ {
+		stat := blockStat{}
+		// read first key length
+		keyLength := int(binary.LittleEndian.Uint16(mustReadBytes(metaReader, 2)))
+
+		// read all the data
+		stat.firstKey = mustReadBytes(metaReader, keyLength)
+		stat.offset = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
+		stat.rawBytes = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
+		stat.compressedBytes = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
+		stat.hash = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
+		// add to the index
+		s.metadata.blockIndex[[math.MaxUint16]byte(stat.firstKey)] = stat
+	}
+
+	return nil
 }
 
 // probeBloomFilter probes a bloom filter for whether they key might exist within a block in the file.
