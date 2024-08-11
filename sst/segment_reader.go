@@ -1,6 +1,7 @@
 package sst
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -56,7 +57,10 @@ func (s *SegmentReader) LoadCachedMetadata(metadata *segmentMetadata) {
 	s.metadata = metadata
 }
 
-var ErrMismatchedMetaBlockHash = errors.New("mismatched meta block hash")
+var (
+	ErrUnknownSegmentVersion   = errors.New("unknown segment version")
+	ErrMismatchedMetaBlockHash = errors.New("mismatched meta block hash")
+)
 
 // FetchAndLoadMetadata will load the metadata from the file it not already held in the reader, then returns it (for caching).
 func (s *SegmentReader) FetchAndLoadMetadata() (*segmentMetadata, error) {
@@ -74,6 +78,10 @@ func (s *SegmentReader) FetchAndLoadMetadata() (*segmentMetadata, error) {
 	}
 
 	segmentVersion := finalSegmentBytes[16]
+	if segmentVersion != 1 {
+		return nil, fmt.Errorf("%w: expected=%d got=%d", ErrUnknownSegmentVersion, 1, segmentVersion)
+	}
+
 	metaBlockOffset := binary.LittleEndian.Uint64(finalSegmentBytes[0:8])
 	metaBlockHash := binary.LittleEndian.Uint64(finalSegmentBytes[8:16])
 
@@ -94,8 +102,23 @@ func (s *SegmentReader) FetchAndLoadMetadata() (*segmentMetadata, error) {
 	}
 
 	// Read the meta block into struct
-	var metaBlock segmentMetadata
+	s.metadata = &segmentMetadata{}
+	metaReader := bytes.NewReader(metaBlockBytes)
 
+	// we only support normal block index now so can skip first byte
+	metaReader.Seek(1, io.SeekStart)
+
+	// read the block index according to spec
+	err = s.loadBlockIndex(metaReader, int(binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))))
+	if err != nil {
+		return nil, fmt.Errorf("error in loadBlockIndex: %w", err)
+	}
+
+	panic("todo")
+}
+
+// loadBlockIndex loads the block index into the SegmentReader's segmentMetadata using the provided metaReader
+func (s *SegmentReader) loadBlockIndex(metaReader *bytes.Reader, blockLength int) error {
 	panic("todo")
 }
 
@@ -141,4 +164,25 @@ func (s *SegmentReader) GetRow(key []byte) ([]byte, error) {
 
 func (s *SegmentReader) GetRange(start, end []byte) ([]byte, error) {
 	panic("todo")
+}
+
+func readBytes(reader io.Reader, bytes int) ([]byte, error) {
+	buf := make([]byte, bytes)
+	n, err := reader.Read(buf)
+	if err != nil {
+		return nil, fmt.Errorf("error in reader.Read: %w", err)
+	}
+	if n != bytes {
+		return nil, fmt.Errorf("%w: expected=%d read=%d", ErrUnexpectedBytesWritten, bytes, n)
+	}
+
+	return buf, nil
+}
+
+func mustReadBytes(reader io.Reader, bytes int) []byte {
+	b, err := readBytes(reader, bytes)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
