@@ -1,9 +1,13 @@
 package sst
 
 import (
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/bits-and-blooms/bloom"
+	"github.com/cespare/xxhash/v2"
 	"github.com/danthegoodman1/objectkv/syncx"
+	"io"
 )
 
 var (
@@ -20,6 +24,9 @@ type (
 
 		metadata *segmentMetadata
 
+		reader    io.ReadSeeker
+		fileBytes int
+
 		// options
 		options SegmentReaderOptions
 	}
@@ -34,9 +41,11 @@ type (
 	}
 )
 
-func NewSegmentReader(opts SegmentReaderOptions) SegmentReader {
+func NewSegmentReader(reader io.ReadSeeker, fileBytes int, opts SegmentReaderOptions) SegmentReader {
 	sr := SegmentReader{
-		options: opts,
+		options:   opts,
+		reader:    reader,
+		fileBytes: fileBytes,
 	}
 
 	return sr
@@ -44,11 +53,49 @@ func NewSegmentReader(opts SegmentReaderOptions) SegmentReader {
 
 // LoadCachedMetadata loads in cached metadata
 func (s *SegmentReader) LoadCachedMetadata(metadata *segmentMetadata) {
-	panic("todo")
+	s.metadata = metadata
 }
+
+var ErrMismatchedMetaBlockHash = errors.New("mismatched meta block hash")
 
 // FetchAndLoadMetadata will load the metadata from the file it not already held in the reader, then returns it (for caching).
 func (s *SegmentReader) FetchAndLoadMetadata() (*segmentMetadata, error) {
+	// get final 17 bytes of file
+	_, err := s.reader.Seek(-17, io.SeekEnd)
+	if err != nil {
+		return nil, fmt.Errorf("error in reader.Seek to last 17 bytes: %w", err)
+	}
+
+	// read the bytes
+	finalSegmentBytes := make([]byte, 17)
+	_, err = s.reader.Read(finalSegmentBytes)
+	if err != nil {
+		return nil, fmt.Errorf("error reading final segment bytes: %w", err)
+	}
+
+	segmentVersion := finalSegmentBytes[16]
+	metaBlockOffset := binary.LittleEndian.Uint64(finalSegmentBytes[0:8])
+	metaBlockHash := binary.LittleEndian.Uint64(finalSegmentBytes[8:16])
+
+	// Verify the meta block hash
+	_, err = s.reader.Seek(int64(metaBlockOffset), io.SeekStart)
+	if err != nil {
+		return nil, fmt.Errorf("error in reader.Seek to meta block offset: %w", err)
+	}
+
+	metaBlockBytes := make([]byte, s.fileBytes-int(metaBlockOffset)-17)
+	_, err = s.reader.Read(metaBlockBytes)
+	if err != nil {
+		return nil, fmt.Errorf("error in reader.Read for meta block bytes: %w", err)
+	}
+
+	if calculatedHash := xxhash.Sum64(metaBlockBytes); calculatedHash != metaBlockHash {
+		return nil, fmt.Errorf("%w: expected=%d got=%d", ErrMismatchedMetaBlockHash, metaBlockHash, calculatedHash)
+	}
+
+	// Read the meta block into struct
+	var metaBlock segmentMetadata
+
 	panic("todo")
 }
 
