@@ -39,7 +39,7 @@ type (
 		firstKey []byte
 		lastKey  []byte
 
-		blockIndex map[[math.MaxUint16]byte]blockStat
+		blockIndex map[[math.MaxUint16]byte]blockStat // todo make ordered map? tree?
 	}
 )
 
@@ -153,6 +153,12 @@ func (s *SegmentReader) loadBlockIndex(metaReader *bytes.Reader) error {
 //
 // Fetches the metadata if not already loaded.
 func (s *SegmentReader) probeBloomFilter(key string) (bool, error) {
+	if s.metadata == nil {
+		_, err := s.FetchAndLoadMetadata()
+		if err != nil {
+			return false, fmt.Errorf("error in FetchAndLoadMetadata: %w", err)
+		}
+	}
 	panic("todo")
 }
 
@@ -167,6 +173,13 @@ var ErrNoMoreRows = errors.New("no more rows")
 //
 // TODO this can be done logically by just reading blocks
 func (s *SegmentReader) RowIter() ([]any, error) {
+	if s.metadata == nil {
+		_, err := s.FetchAndLoadMetadata()
+		if err != nil {
+			return nil, fmt.Errorf("error in FetchAndLoadMetadata: %w", err)
+		}
+	}
+
 	// todo read block starting at offset
 	panic("todo")
 }
@@ -177,6 +190,13 @@ func (s *SegmentReader) RowIter() ([]any, error) {
 //
 // Fetches the metadata if not already loaded.
 func (s *SegmentReader) readBlockAtOffset(offset int) (any, error) {
+	if s.metadata == nil {
+		_, err := s.FetchAndLoadMetadata()
+		if err != nil {
+			return nil, fmt.Errorf("error in FetchAndLoadMetadata: %w", err)
+		}
+	}
+
 	// todo read the data at the offset, reading the index at the offset
 	// todo decompress and deserialize
 	// todo return rows
@@ -184,10 +204,24 @@ func (s *SegmentReader) readBlockAtOffset(offset int) (any, error) {
 }
 
 func (s *SegmentReader) GetRow(key []byte) ([]byte, error) {
+	if s.metadata == nil {
+		_, err := s.FetchAndLoadMetadata()
+		if err != nil {
+			return nil, fmt.Errorf("error in FetchAndLoadMetadata: %w", err)
+		}
+	}
+
 	panic("todo")
 }
 
 func (s *SegmentReader) GetRange(start, end []byte) ([]byte, error) {
+	if s.metadata == nil {
+		_, err := s.FetchAndLoadMetadata()
+		if err != nil {
+			return nil, fmt.Errorf("error in FetchAndLoadMetadata: %w", err)
+		}
+	}
+
 	panic("todo")
 }
 
