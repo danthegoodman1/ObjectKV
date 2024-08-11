@@ -1,6 +1,26 @@
-# Segment Format
+# Segment File Format
 
 All numbers are encoded as little endian.
+
+<!-- TOC -->
+* [Segment File Format](#segment-file-format)
+  * [Top level format](#top-level-format)
+  * [Data block format](#data-block-format)
+    * [Size limits](#size-limits)
+  * [Meta block format](#meta-block-format)
+  * [Block index format](#block-index-format)
+    * [Simple block index format](#simple-block-index-format)
+    * [Partitioned block index format (not implemented)](#partitioned-block-index-format-not-implemented)
+  * [Bloom filter block format](#bloom-filter-block-format)
+    * [Single bloom filter](#single-bloom-filter)
+    * [Partitioned bloom filter format (not implemented)](#partitioned-bloom-filter-format-not-implemented)
+  * [Reading a Segment file](#reading-a-segment-file)
+    * [Reading data blocks](#reading-data-blocks)
+  * [Writing a Segment file](#writing-a-segment-file)
+    * [Caching metadata after write](#caching-metadata-after-write)
+<!-- TOC -->
+
+## Top level format
 
 The top-level segment format looks like:
 
@@ -48,15 +68,19 @@ uint16 first key length
 first key bytes
 uint16 last key length
 last key bytes
-uint8 single or partitioned block index (not implemented) (0,1)
-data block index/partitioned data block index
+block index
 bloom filter block
 uint8 compression format (0 none, 1 zstd, 2 lz4)
 ```
 
 ## Block index format
 
-### Single block index format
+```
+uint8 simple or partitioned block index (not implemented) (0,1)
+simple block index/partitioned block index
+```
+
+### Simple block index format
 
 ```
 uint64 number of block index entries
@@ -142,3 +166,9 @@ The safest option is to just abort the write and throw away the writer.
 If you are using a fan-out external writer (e.g. writing to S3 and local cache), ensure that you clean up any files and properly abort S3 writes.
 
 Additionally, if you are retrying to write a segment file by using a new writer, it's greatly advised to use a unique file name for every `SegmentWriter`.
+
+### Caching metadata after write
+
+The `SegmentWriter.Close` method returns the bytes of the metadata block. This can be immediately used with `SegmentReader.BytesToMetadata(SegmentReader{}, metaBlockBytes)` (effectively a static call) to generate metadata struct that can be cached in memory, and subsequently used for future `SegmentReader.LoadCachedMetadata(metadata)` calls.
+
+This allows you to easily read and cache the metadata block while not persisting the segment file to disk to re-read it back in (i.e. only persisting to object storage).

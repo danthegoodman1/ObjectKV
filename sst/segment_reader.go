@@ -24,7 +24,7 @@ type (
 	SegmentReader struct {
 		rowIterBlockOffset int
 
-		metadata *segmentMetadata
+		metadata *SegmentMetadata
 
 		reader    io.ReadSeeker
 		fileBytes int
@@ -33,7 +33,7 @@ type (
 		options SegmentReaderOptions
 	}
 
-	segmentMetadata struct {
+	SegmentMetadata struct {
 		bloomFilter *bloom.BloomFilter
 
 		firstKey []byte
@@ -54,7 +54,7 @@ func NewSegmentReader(reader io.ReadSeeker, fileBytes int, opts SegmentReaderOpt
 }
 
 // LoadCachedMetadata loads in cached metadata
-func (s *SegmentReader) LoadCachedMetadata(metadata *segmentMetadata) {
+func (s *SegmentReader) LoadCachedMetadata(metadata *SegmentMetadata) {
 	s.metadata = metadata
 }
 
@@ -65,7 +65,10 @@ var (
 )
 
 // FetchAndLoadMetadata will load the metadata from the file it not already held in the reader, then returns it (for caching).
-func (s *SegmentReader) FetchAndLoadMetadata() (*segmentMetadata, error) {
+//
+// While a bytes.Reader might be less memory and allocation efficient than inspecting the byte array directly, it is well
+// worth it to simplify the code and ensure correctness. This likely only happens once per file anyway with metadata caching.
+func (s *SegmentReader) FetchAndLoadMetadata() (*SegmentMetadata, error) {
 	// get final 17 bytes of file
 	_, err := s.reader.Seek(-17, io.SeekEnd)
 	if err != nil {
@@ -103,31 +106,58 @@ func (s *SegmentReader) FetchAndLoadMetadata() (*segmentMetadata, error) {
 		return nil, fmt.Errorf("%w: expected=%d got=%d", ErrMismatchedMetaBlockHash, metaBlockHash, calculatedHash)
 	}
 
-	// Read the meta block into struct
-	s.metadata = &segmentMetadata{}
+	metadata, err := s.BytesToMetadata(metaBlockBytes)
+	if err != nil {
+		return nil, fmt.Errorf("error in BytesToMetadata: %w", err)
+	}
+
+	s.metadata = metadata
+	return metadata, nil
+}
+
+// BytesToMetadata turns a metadata byte array into its respective struct.
+//
+// This is useful if you want to preemptively cache metadata from a recent segment write without providing a reader to
+// the entire segment, as the SegmentWriter.Close returns the metadata bytes.
+func (s *SegmentReader) BytesToMetadata(metaBlockBytes []byte) (*SegmentMetadata, error) {
+	metadata := &SegmentMetadata{}
 	metaReader := bytes.NewReader(metaBlockBytes)
 
-	// we only support normal block index now so can skip first byte
-	metaReader.Seek(1, io.SeekStart)
+	// read the first and last key
+	firstKeyLength := int(binary.LittleEndian.Uint16(mustReadBytes(metaReader, 2)))
+	metadata.firstKey = mustReadBytes(metaReader, firstKeyLength)
+	lastKeyLength := int(binary.LittleEndian.Uint16(mustReadBytes(metaReader, 2)))
+	metadata.lastKey = mustReadBytes(metaReader, lastKeyLength)
 
 	// read the block index according to spec
-	err = s.loadBlockIndex(metaReader)
+	blockIndex, err := s.parseBlockIndex(metaReader)
 	if err != nil {
-		return nil, fmt.Errorf("error in loadBlockIndex: %w", err)
+		return nil, fmt.Errorf("error in parseBlockIndex: %w", err)
 	}
+
+	metadata.blockIndex = blockIndex
+
+	// todo read bloom filter block
+
+	// todo read compression
 
 	panic("todo")
 }
 
-// loadBlockIndex loads the block index into the SegmentReader's segmentMetadata using the provided metaReader.
+// parseBlockIndex loads the block index into the SegmentReader's SegmentMetadata using the provided metaReader.
 //
 // It is assumed that the metaReader is Seeked to the start of the data block index
-func (s *SegmentReader) loadBlockIndex(metaReader *bytes.Reader) error {
+func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (map[[math.MaxUint16]byte]blockStat, error) {
+	// we only support simple block index now so can skip first byte
+	metaReader.Seek(1, io.SeekStart)
+
 	// read the number of data block index entries
 	numEntries := int(binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8)))
 	if numEntries == 0 {
-		return fmt.Errorf("%w: had no data block entries", ErrInvalidMetaBlock)
+		return nil, fmt.Errorf("%w: had no data block entries", ErrInvalidMetaBlock)
 	}
+
+	m := map[[math.MaxUint16]byte]blockStat{}
 
 	for i := 0; i < numEntries; i++ {
 		stat := blockStat{}
@@ -141,10 +171,10 @@ func (s *SegmentReader) loadBlockIndex(metaReader *bytes.Reader) error {
 		stat.compressedBytes = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
 		stat.hash = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
 		// add to the index
-		s.metadata.blockIndex[[math.MaxUint16]byte(stat.firstKey)] = stat
+		m[[math.MaxUint16]byte(stat.firstKey)] = stat
 	}
 
-	return nil
+	return m, nil
 }
 
 // probeBloomFilter probes a bloom filter for whether they key might exist within a block in the file.

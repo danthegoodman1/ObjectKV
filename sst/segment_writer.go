@@ -179,28 +179,28 @@ func (s *SegmentWriter) flushCurrentDataBlock() error {
 //
 // Once this has completed then the segment is considered durably stored.
 //
-// Returns the size of the file
-func (s *SegmentWriter) Close() (uint64, error) {
+// Returns the size of the file, the metadata bytes (useful for caching)
+func (s *SegmentWriter) Close() (uint64, []byte, error) {
 	// flush the current block if needed
 	if s.blockWriter != nil {
 		err := s.flushCurrentDataBlock()
 		if err != nil {
-			return 0, fmt.Errorf("error in flushCurrentDataBlock: %w", err)
+			return 0, nil, fmt.Errorf("error in flushCurrentDataBlock: %w", err)
 		}
 	}
 
 	if len(s.blockIndex) == 0 {
-		return 0, ErrNoRows
+		return 0, nil, ErrNoRows
 	}
 
 	// write the meta block
 	metaBlockBytes := s.generateMetaBlock()
 	bytesWritten, err := s.externalWriter.Write(metaBlockBytes)
 	if err != nil {
-		return 0, fmt.Errorf("error writing meta block to external writer: %w", err)
+		return 0, nil, fmt.Errorf("error writing meta block to external writer: %w", err)
 	}
 	if bytesWritten != len(metaBlockBytes) {
-		return 0, fmt.Errorf("%w (meta block) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, len(metaBlockBytes), bytesWritten)
+		return 0, nil, fmt.Errorf("%w (meta block) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, len(metaBlockBytes), bytesWritten)
 	}
 	s.currentByteOffset += uint64(bytesWritten)
 	metaBlockStartOffset := s.currentByteOffset
@@ -208,37 +208,37 @@ func (s *SegmentWriter) Close() (uint64, error) {
 	// Write the meta block offset
 	bytesWritten, err = s.externalWriter.Write(binary.LittleEndian.AppendUint64([]byte{}, metaBlockStartOffset))
 	if err != nil {
-		return 0, fmt.Errorf("error writing meta block offset to external writer: %w", err)
+		return 0, nil, fmt.Errorf("error writing meta block offset to external writer: %w", err)
 	}
 	if bytesWritten != 8 {
-		return 0, fmt.Errorf("%w (meta block offset) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, len(metaBlockBytes), bytesWritten)
+		return 0, nil, fmt.Errorf("%w (meta block offset) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, len(metaBlockBytes), bytesWritten)
 	}
 	s.currentByteOffset += uint64(bytesWritten)
 
 	// Write the meta block hash
 	bytesWritten, err = s.externalWriter.Write(binary.LittleEndian.AppendUint64([]byte{}, xxhash.Sum64(metaBlockBytes)))
 	if err != nil {
-		return 0, fmt.Errorf("error writing block hash bytes to external writer: %w", err)
+		return 0, nil, fmt.Errorf("error writing block hash bytes to external writer: %w", err)
 	}
 	if bytesWritten != 8 {
-		return 0, fmt.Errorf("%w (meta block offset) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, len(metaBlockBytes), bytesWritten)
+		return 0, nil, fmt.Errorf("%w (meta block offset) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, len(metaBlockBytes), bytesWritten)
 	}
 	s.currentByteOffset += uint64(bytesWritten)
 
 	// Write the segment file version
 	bytesWritten, err = s.externalWriter.Write([]byte{1})
 	if err != nil {
-		return 0, fmt.Errorf("error writing final segment bytes to external writer: %w", err)
+		return 0, nil, fmt.Errorf("error writing final segment bytes to external writer: %w", err)
 	}
 	if bytesWritten != 1 {
-		return 0, fmt.Errorf("%w (meta block offset) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, 1, bytesWritten)
+		return 0, nil, fmt.Errorf("%w (meta block offset) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, 1, bytesWritten)
 	}
 	s.currentByteOffset += uint64(bytesWritten)
 
 	// close the writer so it can't be reused
 	s.closed = true
 
-	return s.currentByteOffset, nil
+	return s.currentByteOffset, metaBlockBytes, nil
 }
 
 func (s *SegmentWriter) generateMetaBlock() []byte {
