@@ -1,5 +1,10 @@
 # Compaction
 
+<!-- TOC -->
+* [Compaction](#compaction)
+  * [Range Compaction](#range-compaction)
+<!-- TOC -->
+
 ## Range Compaction
 
 Ranges should be split by size at compaction time. The reason is to keep segments small, so that compaction happens quickly (reduce the amount of time lost by a network failure writing to S3).
