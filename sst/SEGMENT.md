@@ -88,6 +88,7 @@ uint64 number of block index entries
     uint16 block first key length
     key bytes
     uint64 block start offset
+    uint64 block final (padded) bytes length
     uint64 block raw bytes length
     uint64 block compressed bytes length (0 if not compressed)
     uint64 block hash (post compression)

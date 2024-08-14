@@ -204,6 +204,7 @@ func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (map[[512]byte
 		// read all the data
 		stat.firstKey = mustReadBytes(metaReader, keyLength)
 		stat.offset = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
+		stat.finalBytes = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
 		stat.rawBytes = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
 		stat.compressedBytes = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
 		stat.hash = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))

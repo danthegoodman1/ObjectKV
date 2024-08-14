@@ -128,6 +128,16 @@ func (s *SegmentWriter) flushCurrentDataBlock() error {
 		}
 	}
 
+	// write the metadata to memory for the block start with offset and first key
+	stat := blockStat{
+		offset:   s.currentByteOffset,
+		rawBytes: s.currentRawBlockSize,
+		firstKey: s.currentBlockStartKey,
+	}
+	if useZSTD || useLZ4 {
+		stat.compressedBytes = uint64(s.blockBuffer.Len())
+	}
+
 	if remainder := s.options.DataBlockSize - uint64(s.blockBuffer.Len())%s.options.DataBlockSize; remainder > 0 {
 		// write the (padded min) multiple of 4k block to the file after compression
 		bytesWritten, err := s.blockBuffer.Write(make([]byte, remainder))
@@ -139,10 +149,15 @@ func (s *SegmentWriter) flushCurrentDataBlock() error {
 		}
 	}
 
+	stat.finalBytes = uint64(s.blockBuffer.Len())
+
 	blockBytes := s.blockBuffer.Bytes()
 
 	// capture a blockHash of the final block bytes
 	blockHash := xxhash.Sum64(blockBytes)
+	stat.hash = blockHash
+
+	s.blockIndex = append(s.blockIndex, stat)
 
 	// flush the block buffer
 	bytesWritten, err := s.externalWriter.Write(blockBytes)
@@ -153,22 +168,10 @@ func (s *SegmentWriter) flushCurrentDataBlock() error {
 		return fmt.Errorf("%w - expected=%d wrote=%d", ErrUnexpectedBytesWritten, s.blockBuffer.Len(), bytesWritten)
 	}
 
-	// write the metadata to memory for the block start with offset and first key
-	stat := blockStat{
-		offset:   s.currentByteOffset,
-		rawBytes: s.currentRawBlockSize,
-		hash:     blockHash,
-		firstKey: s.currentBlockStartKey,
-	}
-	s.currentByteOffset += uint64(bytesWritten)
-	if useZSTD || useLZ4 {
-		stat.compressedBytes = uint64(s.blockBuffer.Len())
-	}
-	s.blockIndex = append(s.blockIndex, stat)
-
 	// reset the block writer, block stats will get reset when a new blockWriter is created
 	s.blockWriter = nil
 
+	s.currentByteOffset += uint64(bytesWritten)
 	return nil
 }
 
