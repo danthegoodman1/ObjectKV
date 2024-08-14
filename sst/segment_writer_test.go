@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -25,7 +26,7 @@ func TestSegmentWriterNoCompression(t *testing.T) {
 		}
 		totalBytes += len(key) + len(val)
 	}
-	segmentLen, err := w.Close()
+	segmentLen, _, err := w.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,12 +54,50 @@ func TestSegmentWriterZSTD(t *testing.T) {
 		}
 		totalBytes += len(key) + len(val)
 	}
-	segmentLen, err := w.Close()
+	segmentLen, _, err := w.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
 	delta := time.Since(s)
 	t.Log("Wrote", totalBytes, "in", delta, fmt.Sprintf("%.5fMB/s", float64(totalBytes)/1_000_000/delta.Seconds()))
 	// t.Log(hex.EncodeToString(b.Bytes()))
+	t.Log("Got segment length", segmentLen)
+}
+
+func TestSegmentWriterLargerThanBlock(t *testing.T) {
+	b := &bytes.Buffer{}
+	opts := DefaultSegmentWriterOptions()
+	opts.BloomFilter = nil
+	w := NewSegmentWriter(b, opts)
+
+	totalBytes := 0
+
+	// Write a really large row
+	key := []byte(strings.Repeat("a", 511))
+	val := []byte(strings.Repeat("b", 10_000))
+	err := w.WriteRow(key, val)
+	if err != nil {
+		t.Fatal(err)
+	}
+	totalBytes += len(key) + len(val)
+
+	s := time.Now()
+	for i := 0; i < 200; i++ {
+		key := []byte(fmt.Sprintf("key%d", i))
+		val := []byte(fmt.Sprintf("value%d", i))
+		err := w.WriteRow(key, val)
+		if err != nil {
+			t.Fatal(err)
+		}
+		totalBytes += len(key) + len(val)
+	}
+
+	segmentLen, _, err := w.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta := time.Since(s)
+	t.Log("Wrote", totalBytes, "in", delta, fmt.Sprintf("%.2fMB/s", float64(totalBytes)/1_000_000/delta.Seconds())) // 22MB/s
+	t.Log(hex.EncodeToString(b.Bytes()))
 	t.Log("Got segment length", segmentLen)
 }
