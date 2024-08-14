@@ -9,7 +9,6 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/danthegoodman1/objectkv/syncx"
 	"io"
-	"math"
 )
 
 var (
@@ -36,10 +35,15 @@ type (
 	SegmentMetadata struct {
 		bloomFilter *bloom.BloomFilter
 
+		// ZSTDCompression is the highest priority compression check
+		ZSTDCompression bool
+		// ZSTDCompression takes priority
+		LZ4Compression bool
+
 		firstKey []byte
 		lastKey  []byte
 
-		blockIndex map[[math.MaxUint16]byte]blockStat // todo make ordered map? tree?
+		blockIndex map[[512]byte]blockStat // todo make ordered map? tree?
 	}
 )
 
@@ -129,27 +133,59 @@ func (s *SegmentReader) BytesToMetadata(metaBlockBytes []byte) (*SegmentMetadata
 	lastKeyLength := int(binary.LittleEndian.Uint16(mustReadBytes(metaReader, 2)))
 	metadata.lastKey = mustReadBytes(metaReader, lastKeyLength)
 
+	var err error
+
+	// read bloom filter block
+	metadata.bloomFilter, err = s.parseBloomFilterBlock(metaReader)
+	if err != nil {
+		return nil, fmt.Errorf("error in parseBloomFilterBlock: %w", err)
+	}
+
+	// read compression
+	compressionByte := mustReadBytes(metaReader, 1)[0]
+	switch compressionByte {
+	case 1:
+		metadata.ZSTDCompression = true
+	case 2:
+		metadata.LZ4Compression = true
+	}
+
 	// read the block index according to spec
-	blockIndex, err := s.parseBlockIndex(metaReader)
+	metadata.blockIndex, err = s.parseBlockIndex(metaReader)
 	if err != nil {
 		return nil, fmt.Errorf("error in parseBlockIndex: %w", err)
 	}
 
-	metadata.blockIndex = blockIndex
+	return metadata, nil
+}
 
-	// todo read bloom filter block
+func (s *SegmentReader) parseBloomFilterBlock(metaReader *bytes.Reader) (*bloom.BloomFilter, error) {
+	enabled := mustReadBytes(metaReader, 1)[0] == 1
 
-	// todo read compression
+	if !enabled {
+		return nil, nil
+	}
 
-	panic("todo")
+	// read the length of the filter
+	bloomLength := binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
+	bloomBytes := mustReadBytes(metaReader, int(bloomLength))
+
+	var bloomFilter bloom.BloomFilter
+	_, err := bloomFilter.ReadFrom(bytes.NewReader(bloomBytes))
+	if err != nil {
+		return nil, fmt.Errorf("error in mustReadBytes(metaReader, 8): %w", err)
+	}
+
+	return &bloomFilter, nil
 }
 
 // parseBlockIndex loads the block index into the SegmentReader's SegmentMetadata using the provided metaReader.
 //
 // It is assumed that the metaReader is Seeked to the start of the data block index
-func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (map[[math.MaxUint16]byte]blockStat, error) {
+func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (map[[512]byte]blockStat, error) {
 	// we only support simple block index now so can skip first byte
-	metaReader.Seek(1, io.SeekStart)
+	// metaReader.Seek(1, io.SeekCurrent)
+	mustReadBytes(metaReader, 1)
 
 	// read the number of data block index entries
 	numEntries := int(binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8)))
@@ -157,10 +193,11 @@ func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (map[[math.Max
 		return nil, fmt.Errorf("%w: had no data block entries", ErrInvalidMetaBlock)
 	}
 
-	m := map[[math.MaxUint16]byte]blockStat{}
+	m := map[[512]byte]blockStat{}
 
 	for i := 0; i < numEntries; i++ {
 		stat := blockStat{}
+
 		// read first key length
 		keyLength := int(binary.LittleEndian.Uint16(mustReadBytes(metaReader, 2)))
 
@@ -171,7 +208,9 @@ func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (map[[math.Max
 		stat.compressedBytes = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
 		stat.hash = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
 		// add to the index
-		m[[math.MaxUint16]byte(stat.firstKey)] = stat
+		var key [512]byte
+		copy(key[:], stat.firstKey)
+		m[key] = stat
 	}
 
 	return m, nil
@@ -255,6 +294,8 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]byte, error) {
 	panic("todo")
 }
 
+var ErrUnexpectedBytesRead = errors.New("unexpected bytes read")
+
 func readBytes(reader io.Reader, bytes int) ([]byte, error) {
 	buf := make([]byte, bytes)
 	n, err := reader.Read(buf)
@@ -262,7 +303,7 @@ func readBytes(reader io.Reader, bytes int) ([]byte, error) {
 		return nil, fmt.Errorf("error in reader.Read: %w", err)
 	}
 	if n != bytes {
-		return nil, fmt.Errorf("%w: expected=%d read=%d", ErrUnexpectedBytesWritten, bytes, n)
+		return nil, fmt.Errorf("%w: expected=%d read=%d", ErrUnexpectedBytesRead, bytes, n)
 	}
 
 	return buf, nil

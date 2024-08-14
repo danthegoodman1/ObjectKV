@@ -122,14 +122,11 @@ func (s *SegmentWriter) flushCurrentDataBlock() error {
 	useLZ4 := !useZSTD && s.options.LZ4Compression
 
 	if zstdEncoder, ok := s.blockWriter.(*zstd.Encoder); ok {
-		fmt.Println("closing zstd encoder")
 		err := zstdEncoder.Close()
 		if err != nil {
 			return fmt.Errorf("error in zstdEncode.Close(): %w", err)
 		}
 	}
-
-	fmt.Println("Raw bytes", s.currentRawBlockSize, "compressed", s.blockBuffer.Len())
 
 	if remainder := s.options.DataBlockSize - uint64(s.blockBuffer.Len())%s.options.DataBlockSize; remainder > 0 {
 		// write the (padded min) multiple of 4k block to the file after compression
@@ -155,7 +152,6 @@ func (s *SegmentWriter) flushCurrentDataBlock() error {
 	if bytesWritten != s.blockBuffer.Len() {
 		return fmt.Errorf("%w - expected=%d wrote=%d", ErrUnexpectedBytesWritten, s.blockBuffer.Len(), bytesWritten)
 	}
-	s.currentByteOffset += uint64(bytesWritten)
 
 	// write the metadata to memory for the block start with offset and first key
 	stat := blockStat{
@@ -164,6 +160,7 @@ func (s *SegmentWriter) flushCurrentDataBlock() error {
 		hash:     blockHash,
 		firstKey: s.currentBlockStartKey,
 	}
+	s.currentByteOffset += uint64(bytesWritten)
 	if useZSTD || useLZ4 {
 		stat.compressedBytes = uint64(s.blockBuffer.Len())
 	}
@@ -251,9 +248,6 @@ func (s *SegmentWriter) generateMetaBlock() []byte {
 	metaBlock.Write(binary.LittleEndian.AppendUint16([]byte{}, uint16(len(s.lastKey))))
 	metaBlock.Write(s.lastKey)
 
-	// write 0 byte to indicate not a partitioned block index
-	metaBlock.Write([]byte{0})
-
 	// write the bloom filter type and bloom filter (if using it)
 	if s.options.BloomFilter != nil {
 		metaBlock.Write([]byte{1}) // using bloom filter
@@ -264,6 +258,20 @@ func (s *SegmentWriter) generateMetaBlock() []byte {
 	} else {
 		metaBlock.Write([]byte{0}) // not using bloom filter
 	}
+
+	// write the compression
+	useZSTD := s.options.ZSTDCompressionLevel > 0
+	useLZ4 := !useZSTD && s.options.LZ4Compression
+	if useZSTD {
+		metaBlock.Write([]byte{1})
+	} else if useLZ4 {
+		metaBlock.Write([]byte{2})
+	} else {
+		metaBlock.Write([]byte{0})
+	}
+
+	// write 0 byte to indicate not a partitioned block index
+	metaBlock.Write([]byte{0})
 
 	// write the number of block index entries
 	metaBlock.Write(binary.LittleEndian.AppendUint64([]byte{}, uint64(len(s.blockIndex))))

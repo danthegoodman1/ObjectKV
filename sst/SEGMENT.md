@@ -68,9 +68,9 @@ uint16 first key length
 first key bytes
 uint16 last key length
 last key bytes
-block index
 bloom filter block
 uint8 compression format (0 none, 1 zstd, 2 lz4)
+block index
 ```
 
 ## Block index format
@@ -100,8 +100,8 @@ uint64 number of block index entries
 
 ```
 uint8 whether no bloom filter, bloom filter, or partitioned bloom filter (not implemented) (0,1,2)
-uint64 byte length of bloom filter
-bloom filter bytes
+uint64 byte length of bloom filter (if exists)
+bloom filter bytes (if exists)
 ```
 
 ### Single bloom filter
