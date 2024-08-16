@@ -196,7 +196,7 @@ func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (*btree.BTreeG
 	}
 
 	t := btree.NewG[blockStat](2, func(a, b blockStat) bool {
-		return bytes.Compare(a.firstKey, b.firstKey) == 1
+		return bytes.Compare(a.firstKey, b.firstKey) == -1
 	})
 
 	for i := 0; i < numEntries; i++ {
@@ -344,7 +344,7 @@ func (s *SegmentReader) GetRow(key []byte) (KVPair, error) {
 
 	// find the last block first key before this
 	var stat *blockStat
-	s.metadata.blockIndex.AscendGreaterOrEqual(blockStat{firstKey: key}, func(item blockStat) bool {
+	s.metadata.blockIndex.DescendLessOrEqual(blockStat{firstKey: key}, func(item blockStat) bool {
 		stat = &item
 		return false
 	})
@@ -354,12 +354,12 @@ func (s *SegmentReader) GetRow(key []byte) (KVPair, error) {
 	}
 
 	// otherwise we have the block it might be in
-	block, err := s.readBlockWithStat(*stat)
+	blockRows, err := s.readBlockWithStat(*stat)
 	if err != nil {
 		return KVPair{}, fmt.Errorf("error in readBlockWithFirstKey: %w", err)
 	}
 
-	for _, pair := range block {
+	for _, pair := range blockRows {
 		if bytes.Equal(pair.Key, key) {
 			return pair, nil
 		}
@@ -376,7 +376,33 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 		}
 	}
 
-	panic("todo")
+	// find all blocks data could be in
+	var stats []blockStat
+	// have to incr by 1 bc top of range is no incl
+	endIncr := make([]byte, len(end))
+	copy(endIncr, end)
+	endIncr[len(endIncr)-1] = endIncr[len(endIncr)-1] << 1
+	// todo check if infinite range
+	s.metadata.blockIndex.AscendRange(blockStat{firstKey: start}, blockStat{firstKey: endIncr}, func(item blockStat) bool {
+		stats = append(stats, item)
+		return true
+	})
+
+	var inclRows []KVPair
+	// for each block, get everything that is in the range
+	for _, stat := range stats {
+		blockRows, err := s.readBlockWithStat(stat)
+		if err != nil {
+			return nil, fmt.Errorf("error in readBlockWithStat for offset %d: %w", stat.offset, err)
+		}
+		for _, row := range blockRows {
+			if bytes.Compare(start, row.Key) <= 0 && bytes.Compare(end, row.Key) >= 0 {
+				inclRows = append(inclRows, row)
+			}
+		}
+	}
+
+	return inclRows, nil
 }
 
 var ErrUnexpectedBytesRead = errors.New("unexpected bytes read")

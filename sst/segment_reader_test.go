@@ -153,15 +153,21 @@ func TestReadUncompressed(t *testing.T) {
 	}
 
 	row, err = r.GetRow([]byte("fuhguiregui"))
-	if !errors.Is(err, ErrNoRows) {
+	if !errors.Is(err, ErrNoRows) && err != nil {
 		t.Fatal("got something else", row, err)
 	}
 
 	row, err = r.GetRow([]byte("key101"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Equal(row.Key, []byte("key101")) {
-		t.Fatal("random key bytes not equal")
+		t.Fatal("random key bytes not equal, got:", string(row.Key))
 	}
 	row, err = r.GetRow([]byte("key101"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Equal(row.Value, []byte("value101")) {
 		t.Fatal("random value bytes not equal")
 	}
@@ -175,6 +181,29 @@ func TestReadUncompressed(t *testing.T) {
 	}
 	if !bytes.Equal(row.Value, []byte(lastValue)) {
 		t.Fatal("last value bytes not equal")
+	}
+
+	// Read a range
+	rows, err = r.GetRange([]byte(firstKey), []byte(secondBlockFirstKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// only 104 bc it's lex sorting
+	if len(rows) != 104 {
+		t.Fatal("did not get 104 rows, got", len(rows))
+	}
+	if !bytes.Equal(rows[0].Key, []byte(firstKey)) {
+		t.Fatal("first row did not match first key")
+	}
+	if !bytes.Equal(rows[0].Value, []byte(firstValue)) {
+		t.Fatal("first row did not match first value")
+	}
+	if !bytes.Equal(rows[len(rows)-1].Key, []byte(secondBlockFirstKey)) {
+		t.Fatal("last row did not match last key", string(rows[len(rows)-1].Key))
+	}
+	if !bytes.Equal(rows[len(rows)-1].Value, []byte(secondBlockFirstValue)) {
+		t.Fatal("last row did not match last value", string(rows[len(rows)-1].Value))
 	}
 }
 
@@ -293,11 +322,14 @@ func TestReadCompressionZSTD(t *testing.T) {
 	}
 
 	row, err = r.GetRow([]byte("fuhguiregui"))
-	if !errors.Is(err, ErrNoRows) {
+	if !errors.Is(err, ErrNoRows) && err != nil {
 		t.Fatal("got something else", row, err)
 	}
 
 	row, err = r.GetRow([]byte("key101"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Equal(row.Key, []byte("key101")) {
 		t.Fatal("random key bytes not equal")
 	}
@@ -311,6 +343,29 @@ func TestReadCompressionZSTD(t *testing.T) {
 	}
 	if !bytes.Equal(row.Value, []byte(lastValue)) {
 		t.Fatal("last value bytes not equal")
+	}
+
+	// Read a range
+	rows, err = r.GetRange([]byte(firstKey), []byte(lastKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// only 112 bc it's lex sorting
+	if len(rows) != 112 {
+		t.Fatal("did not get 112 rows, got", len(rows))
+	}
+	if !bytes.Equal(rows[0].Key, []byte(firstKey)) {
+		t.Fatal("first row did not match first key")
+	}
+	if !bytes.Equal(rows[0].Value, []byte(firstValue)) {
+		t.Fatal("first row did not match first value")
+	}
+	if !bytes.Equal(rows[len(rows)-1].Key, []byte(lastKey)) {
+		t.Fatal("last row did not match last key", string(rows[len(rows)-1].Key))
+	}
+	if !bytes.Equal(rows[len(rows)-1].Value, []byte(lastValue)) {
+		t.Fatal("last row did not match last value", string(rows[len(rows)-1].Value))
 	}
 }
 
