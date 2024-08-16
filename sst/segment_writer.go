@@ -49,7 +49,7 @@ var (
 	ErrUnexpectedBytesWritten = errors.New("unexpected number of bytes written")
 	ErrKeyTooLarge            = errors.New("key too large, must be <= max uint16 bytes")
 	ErrValueTooLarge          = errors.New("value too large, must be <= max uin32 bytes")
-	ErrNoRows                 = errors.New("no rows were written, can't have an empty segment file")
+	ErrNoRowsWritten          = errors.New("no rows were written, can't have an empty segment file")
 )
 
 // WriteRow writes a given row to the segment. Cannot write after the writer is closed.
@@ -191,7 +191,7 @@ func (s *SegmentWriter) Close() (uint64, []byte, error) {
 	}
 
 	if len(s.blockIndex) == 0 {
-		return 0, nil, ErrNoRows
+		return 0, nil, ErrNoRowsWritten
 	}
 
 	// write the meta block

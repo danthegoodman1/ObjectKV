@@ -7,6 +7,7 @@ import (
 
 type (
 	blockStat struct {
+		firstKey []byte
 		// where in the file this block starts (post compression)
 		offset uint64
 		// final block byte size (incl padding)
@@ -18,8 +19,7 @@ type (
 		// 0 if not compressed
 		compressedSize uint64
 		// final block bytes hash (incl compression)
-		hash     uint64
-		firstKey []byte
+		hash uint64
 	}
 )
 

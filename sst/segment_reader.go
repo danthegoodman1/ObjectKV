@@ -267,24 +267,17 @@ type KVPair struct {
 	Value []byte
 }
 
-// readBlockWithStartKey will read a data block at an offset, decompress and deserialize it.
+// readBlockWithStat will read a data block at an offset, decompress and deserialize it.
 //
 // Will error if the offset is not a valid block starting point.
 //
 // Fetches the metadata if not already loaded.
-func (s *SegmentReader) readBlockWithStartKey(startKey []byte) ([]KVPair, error) {
+func (s *SegmentReader) readBlockWithStat(stat blockStat) ([]KVPair, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
 		if err != nil {
 			return nil, fmt.Errorf("error in FetchAndLoadMetadata: %w", err)
 		}
-	}
-
-	var key [512]byte
-	copy(key[:], startKey)
-	stat, exists := s.metadata.blockIndex.Get(blockStat{firstKey: startKey})
-	if !exists {
-		return nil, ErrStartKeyNotFound
 	}
 
 	_, err := s.reader.Seek(int64(stat.offset), io.SeekStart)
@@ -341,12 +334,31 @@ func (s *SegmentReader) readBlockWithStartKey(startKey []byte) ([]KVPair, error)
 	return rows, nil
 }
 
+var ErrNoRows = errors.New("no rows found")
+
 func (s *SegmentReader) GetRow(key []byte) ([]byte, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
 		if err != nil {
 			return nil, fmt.Errorf("error in FetchAndLoadMetadata: %w", err)
 		}
+	}
+
+	// find the last block first key before this
+	var stat *blockStat
+	s.metadata.blockIndex.DescendGreaterThan(blockStat{firstKey: key}, func(item blockStat) bool {
+		stat = &item
+		return false
+	})
+
+	if stat == nil {
+		return nil, ErrNoRows
+	}
+
+	// otherwise we have the block it might be in
+	block, err := s.readBlockWithFirstKey(stat.firstKey)
+	if err != nil {
+		return nil, fmt.Errorf("error in readBlockWithFirstKey: %w", err)
 	}
 
 	panic("todo")

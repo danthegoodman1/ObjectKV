@@ -98,7 +98,7 @@ func TestReadUncompressed(t *testing.T) {
 	}
 
 	// Read block data
-	rows, err := r.readBlockWithStartKey([]byte(firstKey))
+	rows, err := r.readBlockWithStat(blockStat{firstKey: []byte(firstKey)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestReadUncompressed(t *testing.T) {
 	}
 
 	// read the second block
-	secondRows, err := r.readBlockWithStartKey([]byte(secondBlockFirstKey))
+	secondRows, err := r.readBlockWithStat(blockStat{firstKey: []byte(secondBlockFirstKey)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestReadCompressionZSTD(t *testing.T) {
 	}
 
 	// Read block data
-	rows, err := r.readBlockWithStartKey([]byte(firstKey))
+	rows, err := r.readBlockWithStat(blockStat{firstKey: []byte(firstKey)})
 	if err != nil {
 		t.Fatal(err)
 	}
