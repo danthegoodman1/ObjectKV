@@ -260,8 +260,6 @@ func (s *SegmentReader) RowIter() ([]any, error) {
 	panic("todo")
 }
 
-var ErrStartKeyNotFound = errors.New("start key not found")
-
 type KVPair struct {
 	Key   []byte
 	Value []byte
@@ -336,35 +334,41 @@ func (s *SegmentReader) readBlockWithStat(stat blockStat) ([]KVPair, error) {
 
 var ErrNoRows = errors.New("no rows found")
 
-func (s *SegmentReader) GetRow(key []byte) ([]byte, error) {
+func (s *SegmentReader) GetRow(key []byte) (KVPair, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
 		if err != nil {
-			return nil, fmt.Errorf("error in FetchAndLoadMetadata: %w", err)
+			return KVPair{}, fmt.Errorf("error in FetchAndLoadMetadata: %w", err)
 		}
 	}
 
 	// find the last block first key before this
 	var stat *blockStat
-	s.metadata.blockIndex.DescendGreaterThan(blockStat{firstKey: key}, func(item blockStat) bool {
+	s.metadata.blockIndex.AscendGreaterOrEqual(blockStat{firstKey: key}, func(item blockStat) bool {
 		stat = &item
 		return false
 	})
 
 	if stat == nil {
-		return nil, ErrNoRows
+		return KVPair{}, fmt.Errorf("did not find potential block: %w", ErrNoRows)
 	}
 
 	// otherwise we have the block it might be in
-	block, err := s.readBlockWithFirstKey(stat.firstKey)
+	block, err := s.readBlockWithStat(*stat)
 	if err != nil {
-		return nil, fmt.Errorf("error in readBlockWithFirstKey: %w", err)
+		return KVPair{}, fmt.Errorf("error in readBlockWithFirstKey: %w", err)
 	}
 
-	panic("todo")
+	for _, pair := range block {
+		if bytes.Equal(pair.Key, key) {
+			return pair, nil
+		}
+	}
+
+	return KVPair{}, fmt.Errorf("did not find row in block: %w", ErrNoRows)
 }
 
-func (s *SegmentReader) GetRange(start, end []byte) ([]byte, error) {
+func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
 		if err != nil {

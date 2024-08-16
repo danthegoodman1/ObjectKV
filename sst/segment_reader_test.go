@@ -3,6 +3,7 @@ package sst
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -98,7 +99,8 @@ func TestReadUncompressed(t *testing.T) {
 	}
 
 	// Read block data
-	rows, err := r.readBlockWithStat(blockStat{firstKey: []byte(firstKey)})
+	item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)})
+	rows, err := r.readBlockWithStat(item)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +115,8 @@ func TestReadUncompressed(t *testing.T) {
 	}
 
 	// read the second block
-	secondRows, err := r.readBlockWithStat(blockStat{firstKey: []byte(secondBlockFirstKey)})
+	item, _ = metadata.blockIndex.Get(blockStat{firstKey: []byte(secondBlockFirstKey)})
+	secondRows, err := r.readBlockWithStat(item)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,6 +138,43 @@ func TestReadUncompressed(t *testing.T) {
 	}
 	if string(secondRows[len(secondRows)-1].Value) != lastValue {
 		t.Fatal("last value didn't match")
+	}
+
+	// read some rows
+	row, err := r.GetRow([]byte(firstKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(row.Key, []byte(firstKey)) {
+		t.Fatal("first key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte(firstValue)) {
+		t.Fatal("first value bytes not equal")
+	}
+
+	row, err = r.GetRow([]byte("fuhguiregui"))
+	if !errors.Is(err, ErrNoRows) {
+		t.Fatal("got something else", row, err)
+	}
+
+	row, err = r.GetRow([]byte("key101"))
+	if !bytes.Equal(row.Key, []byte("key101")) {
+		t.Fatal("random key bytes not equal")
+	}
+	row, err = r.GetRow([]byte("key101"))
+	if !bytes.Equal(row.Value, []byte("value101")) {
+		t.Fatal("random value bytes not equal")
+	}
+
+	row, err = r.GetRow([]byte(lastKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(row.Key, []byte(lastKey)) {
+		t.Fatal("last key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte(lastValue)) {
+		t.Fatal("last value bytes not equal")
 	}
 }
 
@@ -215,7 +255,8 @@ func TestReadCompressionZSTD(t *testing.T) {
 	}
 
 	// Read block data
-	rows, err := r.readBlockWithStat(blockStat{firstKey: []byte(firstKey)})
+	item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)})
+	rows, err := r.readBlockWithStat(item)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,6 +278,39 @@ func TestReadCompressionZSTD(t *testing.T) {
 	}
 	if string(rows[len(rows)-1].Value) != lastValue {
 		t.Fatal("last value didn't match")
+	}
+
+	// read some rows
+	row, err := r.GetRow([]byte(firstKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(row.Key, []byte(firstKey)) {
+		t.Fatal("first key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte(firstValue)) {
+		t.Fatal("first value bytes not equal")
+	}
+
+	row, err = r.GetRow([]byte("fuhguiregui"))
+	if !errors.Is(err, ErrNoRows) {
+		t.Fatal("got something else", row, err)
+	}
+
+	row, err = r.GetRow([]byte("key101"))
+	if !bytes.Equal(row.Key, []byte("key101")) {
+		t.Fatal("random key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte("value101")) {
+		t.Fatal("random value bytes not equal")
+	}
+
+	row, err = r.GetRow([]byte(lastKey))
+	if !bytes.Equal(row.Key, []byte(lastKey)) {
+		t.Fatal("last key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte(lastValue)) {
+		t.Fatal("last value bytes not equal")
 	}
 }
 

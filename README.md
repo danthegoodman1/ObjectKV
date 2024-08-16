@@ -35,4 +35,10 @@ But I didn't want to sacrifice performance, features, or capabilities found in o
 
 I also like "serverless" databases in the sense that when you're not actively querying or writing, the only costs are storage. As long as you can match that with lighting-fast cold-boots and disk caching to reduce the latency of subsequent operations, you've got something awesome that works great at both small and massive scale.
 
-I also just find these spaces (storage, cost optimization, multi-tenancy, and distributed systems, big datasets) absolutely fascinating and extremely rewarding to buil din.
+I also just find these spaces (storage, cost optimization, multi-tenancy, and distributed systems, big datasets) absolutely fascinating and extremely rewarding to build in.
+
+## Limitations
+
+There's no such thing as a key with an empty value, as that's what we use for tombstones. If you write a key with an empty value, that's the same as deleting.
+
+If you want to make a set, just write a single byte value for the key.
