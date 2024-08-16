@@ -21,8 +21,8 @@ type (
 		// writes to actual destination (S3 &/ file)
 		externalWriter io.Writer
 
-		currentByteOffset uint64      // where we are in the file currently, used for block index
-		blockIndex        []blockStat // todo, either a tree or https://github.com/wk8/go-ordered-map
+		currentByteOffset uint64 // where we are in the file currently, used for block index
+		blockIndex        []blockStat
 		lastKey           []byte
 
 		options SegmentWriterOptions
