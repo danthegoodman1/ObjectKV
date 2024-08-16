@@ -368,6 +368,7 @@ func (s *SegmentReader) GetRow(key []byte) (KVPair, error) {
 	return KVPair{}, fmt.Errorf("did not find row in block: %w", ErrNoRows)
 }
 
+// GetRange will get the range of keys [start, end) from the segment.
 func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
@@ -423,6 +424,7 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 			// unbound start works this way too
 			if bytes.Compare(start, row.Key) <= 0 {
 				if !unboundEnd && bytes.Compare(row.Key, end) >= 0 {
+					// if the end is greater than or eq to the current row, break
 					break
 				}
 				inclRows = append(inclRows, row)
