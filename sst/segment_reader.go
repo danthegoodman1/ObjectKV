@@ -8,6 +8,7 @@ import (
 	"github.com/bits-and-blooms/bloom"
 	"github.com/cespare/xxhash/v2"
 	"github.com/danthegoodman1/objectkv/syncx"
+	"github.com/klauspost/compress/zstd"
 	"io"
 )
 
@@ -204,9 +205,9 @@ func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (map[[512]byte
 		// read all the data
 		stat.firstKey = mustReadBytes(metaReader, keyLength)
 		stat.offset = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
-		stat.finalBytes = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
-		stat.rawBytes = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
-		stat.compressedBytes = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
+		stat.blockSize = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
+		stat.originalSize = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
+		stat.compressedSize = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
 		stat.hash = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
 		// add to the index
 		var key [512]byte
@@ -259,12 +260,14 @@ func (s *SegmentReader) RowIter() ([]any, error) {
 	panic("todo")
 }
 
-// readBlockAtOffset will read a data block at an offset, decompress and deserialize it.
+var ErrStartKeyNotFound = errors.New("start key not found")
+
+// readBlockWithStartKey will read a data block at an offset, decompress and deserialize it.
 //
 // Will error if the offset is not a valid block starting point.
 //
 // Fetches the metadata if not already loaded.
-func (s *SegmentReader) readBlockAtOffset(offset int) (any, error) {
+func (s *SegmentReader) readBlockWithStartKey(startKey []byte) (map[[512]byte][]byte, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
 		if err != nil {
@@ -272,10 +275,65 @@ func (s *SegmentReader) readBlockAtOffset(offset int) (any, error) {
 		}
 	}
 
-	// todo read the data at the offset, reading the index at the offset
-	// todo decompress and deserialize
-	// todo return rows
-	panic("todo")
+	var key [512]byte
+	copy(key[:], startKey)
+	stat, exists := s.metadata.blockIndex[key]
+	if !exists {
+		return nil, ErrStartKeyNotFound
+	}
+
+	_, err := s.reader.Seek(int64(stat.offset), io.SeekStart)
+	if err != nil {
+		return nil, fmt.Errorf("error in reader.Seek: %w", err)
+	}
+
+	// read the block into a reader
+	rawBlockBytes := make([]byte, stat.blockSize)
+	bytesRead, err := s.reader.Read(rawBlockBytes)
+	if err != nil {
+		return nil, fmt.Errorf("error in reader.Read: %w", err)
+	}
+	if bytesRead != int(stat.blockSize) {
+		return nil, fmt.Errorf("%w when reading raw block bytes", ErrUnexpectedBytesRead)
+	}
+
+	decompressedBlockBytes := &bytes.Buffer{}
+	// if compressed, decompress it
+	if s.metadata.ZSTDCompression {
+		dec, err := zstd.NewReader(bytes.NewReader(rawBlockBytes[:stat.compressedSize]))
+		if err != nil {
+			return nil, fmt.Errorf("error in zstd.NewReader: %w", err)
+		}
+		defer dec.Close()
+
+		_, err = io.Copy(decompressedBlockBytes, dec)
+		if err != nil {
+			return nil, fmt.Errorf("error in io.Copy from zstd decoder to byte buffer: %w", err)
+		}
+	} else if s.metadata.LZ4Compression {
+		// todo decompress lz4
+	} else {
+		decompressedBlockBytes = bytes.NewBuffer(rawBlockBytes)
+	}
+
+	// read the rows
+	rows := map[[512]byte][]byte{}
+	totalReadBytes := 0
+	for totalReadBytes < int(stat.originalSize) {
+		keyLen := binary.LittleEndian.Uint16(mustReadBytes(decompressedBlockBytes, 2))
+		totalReadBytes += 2
+		valueLen := binary.LittleEndian.Uint32(mustReadBytes(decompressedBlockBytes, 4))
+		totalReadBytes += 4
+		var key [512]byte
+		copy(key[:], mustReadBytes(decompressedBlockBytes, int(keyLen)))
+		totalReadBytes += int(keyLen)
+		value := mustReadBytes(decompressedBlockBytes, int(valueLen))
+		totalReadBytes += int(valueLen)
+
+		rows[key] = value
+	}
+
+	return rows, nil
 }
 
 func (s *SegmentReader) GetRow(key []byte) ([]byte, error) {

@@ -10,13 +10,13 @@ type (
 		// where in the file this block starts (post compression)
 		offset uint64
 		// final block byte size (incl padding)
-		finalBytes uint64
-		// raw size needed for loading into mem (decompression target or direct load)
-		rawBytes uint64
+		blockSize uint64
+		// original size needed for loading into mem (decompression target or direct load)
+		originalSize uint64
 		// size of the block after compression, used for decompression
 		//
 		// 0 if not compressed
-		compressedBytes uint64
+		compressedSize uint64
 		// final block bytes hash (incl compression)
 		hash     uint64
 		firstKey []byte
@@ -33,9 +33,9 @@ func (bs blockStat) toBytes() []byte {
 
 	// write metadata about the data block
 	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.offset))
-	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.finalBytes))
-	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.rawBytes))
-	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.compressedBytes))
+	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.blockSize))
+	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.originalSize))
+	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.compressedSize))
 	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.hash))
 
 	return blockBytes.Bytes()

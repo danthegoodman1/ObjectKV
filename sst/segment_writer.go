@@ -80,6 +80,7 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 			if err != nil {
 				return fmt.Errorf("error in zstd.NewWriter: %w", err)
 			}
+
 			s.blockWriter = enc
 		} else {
 			s.blockWriter = s.blockBuffer // just use the external writer directly
@@ -130,12 +131,12 @@ func (s *SegmentWriter) flushCurrentDataBlock() error {
 
 	// write the metadata to memory for the block start with offset and first key
 	stat := blockStat{
-		offset:   s.currentByteOffset,
-		rawBytes: s.currentRawBlockSize,
-		firstKey: s.currentBlockStartKey,
+		offset:       s.currentByteOffset,
+		originalSize: s.currentRawBlockSize,
+		firstKey:     s.currentBlockStartKey,
 	}
 	if useZSTD || useLZ4 {
-		stat.compressedBytes = uint64(s.blockBuffer.Len())
+		stat.compressedSize = uint64(s.blockBuffer.Len())
 	}
 
 	if remainder := s.options.DataBlockSize - uint64(s.blockBuffer.Len())%s.options.DataBlockSize; remainder > 0 {
@@ -149,7 +150,7 @@ func (s *SegmentWriter) flushCurrentDataBlock() error {
 		}
 	}
 
-	stat.finalBytes = uint64(s.blockBuffer.Len())
+	stat.blockSize = uint64(s.blockBuffer.Len())
 
 	blockBytes := s.blockBuffer.Bytes()
 
@@ -194,6 +195,7 @@ func (s *SegmentWriter) Close() (uint64, []byte, error) {
 	}
 
 	// write the meta block
+	metaBlockStartOffset := s.currentByteOffset
 	metaBlockBytes := s.generateMetaBlock()
 	bytesWritten, err := s.externalWriter.Write(metaBlockBytes)
 	if err != nil {
@@ -203,7 +205,6 @@ func (s *SegmentWriter) Close() (uint64, []byte, error) {
 		return 0, nil, fmt.Errorf("%w (meta block) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, len(metaBlockBytes), bytesWritten)
 	}
 	s.currentByteOffset += uint64(bytesWritten)
-	metaBlockStartOffset := s.currentByteOffset
 
 	// Write the meta block offset
 	bytesWritten, err = s.externalWriter.Write(binary.LittleEndian.AppendUint64([]byte{}, metaBlockStartOffset))
@@ -216,7 +217,8 @@ func (s *SegmentWriter) Close() (uint64, []byte, error) {
 	s.currentByteOffset += uint64(bytesWritten)
 
 	// Write the meta block hash
-	bytesWritten, err = s.externalWriter.Write(binary.LittleEndian.AppendUint64([]byte{}, xxhash.Sum64(metaBlockBytes)))
+	metaHash := xxhash.Sum64(metaBlockBytes)
+	bytesWritten, err = s.externalWriter.Write(binary.LittleEndian.AppendUint64([]byte{}, metaHash))
 	if err != nil {
 		return 0, nil, fmt.Errorf("error writing block hash bytes to external writer: %w", err)
 	}
