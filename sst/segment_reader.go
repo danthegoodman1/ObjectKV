@@ -376,15 +376,39 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 		}
 	}
 
+	unboundStart := bytes.Equal(start, []byte{})
+	unboundEnd := bytes.Equal(end, []byte{0xff})
+
 	// find all blocks data could be in
-	var stats []blockStat
-	// have to incr by 1 bc top of range is no incl
-	endIncr := make([]byte, len(end))
-	copy(endIncr, end)
-	endIncr[len(endIncr)-1] = endIncr[len(endIncr)-1] << 1
-	// todo check if infinite range
-	s.metadata.blockIndex.AscendRange(blockStat{firstKey: start}, blockStat{firstKey: endIncr}, func(item blockStat) bool {
-		stats = append(stats, item)
+	stats := map[string]blockStat{} // map for dedupe
+
+	// for the start of the range, we get any block below it
+	if unboundStart {
+		s.metadata.blockIndex.AscendLessThan(blockStat{firstKey: end}, func(item blockStat) bool {
+			stats[string(item.firstKey)] = item
+			return true
+		})
+	} else {
+		s.metadata.blockIndex.DescendLessOrEqual(blockStat{firstKey: start}, func(item blockStat) bool {
+			stats[string(item.firstKey)] = item
+			return bytes.Compare(start, item.firstKey) <= 0
+		})
+	}
+
+	// for the end of the range we have to walk down then up until we hit lower and higher edges
+	// need the first one below if it exists
+	s.metadata.blockIndex.DescendLessOrEqual(blockStat{firstKey: end}, func(item blockStat) bool {
+		stats[string(item.firstKey)] = item
+		return false
+	})
+
+	// walk up
+	s.metadata.blockIndex.AscendGreaterOrEqual(blockStat{firstKey: end}, func(item blockStat) bool {
+		if !unboundEnd && bytes.Compare(end, item.firstKey) <= 0 {
+			// our key is less than the first of this block
+			return false
+		}
+		stats[string(item.firstKey)] = item
 		return true
 	})
 
@@ -396,7 +420,11 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 			return nil, fmt.Errorf("error in readBlockWithStat for offset %d: %w", stat.offset, err)
 		}
 		for _, row := range blockRows {
-			if bytes.Compare(start, row.Key) <= 0 && bytes.Compare(end, row.Key) >= 0 {
+			// unbound start works this way too
+			if bytes.Compare(start, row.Key) <= 0 {
+				if !unboundEnd && bytes.Compare(row.Key, end) >= 0 {
+					break
+				}
 				inclRows = append(inclRows, row)
 			}
 		}
