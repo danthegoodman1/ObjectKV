@@ -58,41 +58,42 @@ func TestReadUncompressed(t *testing.T) {
 		t.Fatal("last key mismatch")
 	}
 
-	for key, stat := range metadata.blockIndex {
-		t.Log(string(key[:]), fmt.Sprintf("%+v", stat))
-	}
+	metadata.blockIndex.Ascend(func(item blockStat) bool {
+		t.Log(string(item.firstKey), fmt.Sprintf("%+v", item))
+		return true
+	})
 
 	var firstKeyBytes, secondBlockKeyBytes [512]byte
 	copy(firstKeyBytes[:], firstKey)
 	copy(secondBlockKeyBytes[:], secondBlockFirstKey)
 
-	if len(metadata.blockIndex) != 2 {
+	if metadata.blockIndex.Len() != 2 {
 		t.Fatal("unexpected block index size")
 	}
 
-	if string(metadata.blockIndex[firstKeyBytes].firstKey) != firstKey {
+	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); string(item.firstKey) != firstKey {
 		t.Fatal("first block invalid first key")
 	}
-	if metadata.blockIndex[firstKeyBytes].originalSize != 3600 {
+	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); item.originalSize != 3600 {
 		t.Fatal("first key block invalid raw bytes")
 	}
-	if metadata.blockIndex[firstKeyBytes].compressedSize != 0 {
+	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); item.compressedSize != 0 {
 		t.Fatal("first key block invalid compressed bytes")
 	}
-	if int(metadata.blockIndex[firstKeyBytes].offset) != 0 {
+	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); int(item.offset) != 0 {
 		t.Fatal("first key block invalid offset")
 	}
 
-	if string(metadata.blockIndex[secondBlockKeyBytes].firstKey) != secondBlockFirstKey {
+	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(secondBlockFirstKey)}); string(item.firstKey) != secondBlockFirstKey {
 		t.Fatal("second block invalid first key")
 	}
-	if metadata.blockIndex[secondBlockKeyBytes].originalSize != 180 {
+	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(secondBlockFirstKey)}); item.originalSize != 180 {
 		t.Fatal("second block invalid raw bytes")
 	}
-	if metadata.blockIndex[secondBlockKeyBytes].compressedSize != 0 {
+	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(secondBlockFirstKey)}); item.compressedSize != 0 {
 		t.Fatal("second block invalid compressed bytes")
 	}
-	if int(metadata.blockIndex[secondBlockKeyBytes].offset) != 4096 {
+	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(secondBlockFirstKey)}); int(item.offset) != 4096 {
 		t.Fatal("second block invalid offset")
 	}
 
@@ -104,10 +105,11 @@ func TestReadUncompressed(t *testing.T) {
 
 	t.Log("Read", len(rows), "rows")
 
-	if val, exists := rows[firstKeyBytes]; !exists {
-		t.Fatal("did not exist")
-	} else if string(val) != firstValue {
-		t.Fatal("value didn't match")
+	if string(rows[0].Key) != firstKey {
+		t.Fatal("first key didn't match")
+	}
+	if string(rows[0].Value) != firstValue {
+		t.Fatal("first value didn't match")
 	}
 
 	// read the second block
@@ -121,18 +123,18 @@ func TestReadUncompressed(t *testing.T) {
 		t.Fatal("did not get 200 rows, got", len(secondRows)+len(rows))
 	}
 
-	if val, exists := secondRows[secondBlockKeyBytes]; !exists {
-		t.Fatal("did not exist")
-	} else if string(val) != secondBlockFirstValue {
-		t.Fatal("value didn't match")
+	if string(secondRows[0].Key) != secondBlockFirstKey {
+		t.Fatal("second block first key didn't match")
+	}
+	if string(secondRows[0].Value) != secondBlockFirstValue {
+		t.Fatal("second block first value didn't match")
 	}
 
-	var lastKeyBytes [512]byte
-	copy(lastKeyBytes[:], lastKey)
-	if val, exists := secondRows[lastKeyBytes]; !exists {
-		t.Fatal("did not exist")
-	} else if string(val) != lastValue {
-		t.Fatal("value didn't match")
+	if string(secondRows[len(secondRows)-1].Key) != lastKey {
+		t.Fatal("last key didn't match")
+	}
+	if string(secondRows[len(secondRows)-1].Value) != lastValue {
+		t.Fatal("last value didn't match")
 	}
 }
 
@@ -185,31 +187,29 @@ func TestReadCompressionZSTD(t *testing.T) {
 		t.Fatal("last key mismatch")
 	}
 
-	for key, stat := range metadata.blockIndex {
-		t.Log(string(key[:]), fmt.Sprintf("%+v", stat))
-	}
+	metadata.blockIndex.Ascend(func(item blockStat) bool {
+		t.Log(string(item.firstKey), fmt.Sprintf("%+v", item))
+		return true
+	})
 
-	var firstKeyBytes [512]byte
-	copy(firstKeyBytes[:], firstKey)
-
-	if len(metadata.blockIndex) != 1 {
+	if metadata.blockIndex.Len() != 1 {
 		t.Fatal("unexpected block index size")
 	}
 
-	if string(metadata.blockIndex[firstKeyBytes].firstKey) != firstKey {
+	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); string(item.firstKey) != firstKey {
 		t.Fatal("first block invalid first key")
 	}
-	if metadata.blockIndex[firstKeyBytes].originalSize != 3780 {
+	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); item.originalSize != 3780 {
 		t.Fatal("first key block invalid raw bytes")
 	}
-	if metadata.blockIndex[firstKeyBytes].compressedSize != 436 {
+	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); item.compressedSize != 436 {
 		// if metadata.blockIndex[firstKeyBytes].compressedSize != 29 {
 		t.Fatal("first key block invalid compressed bytes")
 	}
-	if int(metadata.blockIndex[firstKeyBytes].offset) != 0 {
+	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); int(item.offset) != 0 {
 		t.Fatal("first key block invalid offset")
 	}
-	if metadata.blockIndex[firstKeyBytes].hash != 4760777162451107343 {
+	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); item.hash != 4760777162451107343 {
 		// if metadata.blockIndex[firstKeyBytes].hash != 2324848862588043792 {
 		t.Fatal("first key block hash invalid")
 	}
@@ -225,18 +225,18 @@ func TestReadCompressionZSTD(t *testing.T) {
 		t.Fatal("did not get 200 rows, got", len(rows))
 	}
 
-	if val, exists := rows[firstKeyBytes]; !exists {
-		t.Fatal("did not exist")
-	} else if string(val) != firstValue {
-		t.Fatal("value didn't match")
+	if string(rows[0].Key) != firstKey {
+		t.Fatal("first key didn't match")
+	}
+	if string(rows[0].Value) != firstValue {
+		t.Fatal("last value didn't match")
 	}
 
-	var lastKeyBytes [512]byte
-	copy(lastKeyBytes[:], lastKey)
-	if val, exists := rows[lastKeyBytes]; !exists {
-		t.Fatal("did not exist")
-	} else if string(val) != lastValue {
-		t.Fatal("value didn't match")
+	if string(rows[len(rows)-1].Key) != lastKey {
+		t.Fatal("last key didn't match")
+	}
+	if string(rows[len(rows)-1].Value) != lastValue {
+		t.Fatal("last value didn't match")
 	}
 }
 

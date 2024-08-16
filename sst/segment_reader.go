@@ -8,6 +8,7 @@ import (
 	"github.com/bits-and-blooms/bloom"
 	"github.com/cespare/xxhash/v2"
 	"github.com/danthegoodman1/objectkv/syncx"
+	"github.com/google/btree"
 	"github.com/klauspost/compress/zstd"
 	"io"
 )
@@ -44,7 +45,7 @@ type (
 		firstKey []byte
 		lastKey  []byte
 
-		blockIndex map[[512]byte]blockStat // todo make ordered map? tree?
+		blockIndex *btree.BTreeG[blockStat]
 	}
 )
 
@@ -183,7 +184,7 @@ func (s *SegmentReader) parseBloomFilterBlock(metaReader *bytes.Reader) (*bloom.
 // parseBlockIndex loads the block index into the SegmentReader's SegmentMetadata using the provided metaReader.
 //
 // It is assumed that the metaReader is Seeked to the start of the data block index
-func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (map[[512]byte]blockStat, error) {
+func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (*btree.BTreeG[blockStat], error) {
 	// we only support simple block index now so can skip first byte
 	// metaReader.Seek(1, io.SeekCurrent)
 	mustReadBytes(metaReader, 1)
@@ -194,7 +195,9 @@ func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (map[[512]byte
 		return nil, fmt.Errorf("%w: had no data block entries", ErrInvalidMetaBlock)
 	}
 
-	m := map[[512]byte]blockStat{}
+	t := btree.NewG[blockStat](2, func(a, b blockStat) bool {
+		return bytes.Compare(a.firstKey, b.firstKey) == 1
+	})
 
 	for i := 0; i < numEntries; i++ {
 		stat := blockStat{}
@@ -209,13 +212,10 @@ func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (map[[512]byte
 		stat.originalSize = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
 		stat.compressedSize = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
 		stat.hash = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
-		// add to the index
-		var key [512]byte
-		copy(key[:], stat.firstKey)
-		m[key] = stat
+		t.ReplaceOrInsert(stat)
 	}
 
-	return m, nil
+	return t, nil
 }
 
 // probeBloomFilter probes a bloom filter for whether they key might exist within a block in the file.
@@ -262,12 +262,17 @@ func (s *SegmentReader) RowIter() ([]any, error) {
 
 var ErrStartKeyNotFound = errors.New("start key not found")
 
+type KVPair struct {
+	Key   []byte
+	Value []byte
+}
+
 // readBlockWithStartKey will read a data block at an offset, decompress and deserialize it.
 //
 // Will error if the offset is not a valid block starting point.
 //
 // Fetches the metadata if not already loaded.
-func (s *SegmentReader) readBlockWithStartKey(startKey []byte) (map[[512]byte][]byte, error) {
+func (s *SegmentReader) readBlockWithStartKey(startKey []byte) ([]KVPair, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
 		if err != nil {
@@ -277,7 +282,7 @@ func (s *SegmentReader) readBlockWithStartKey(startKey []byte) (map[[512]byte][]
 
 	var key [512]byte
 	copy(key[:], startKey)
-	stat, exists := s.metadata.blockIndex[key]
+	stat, exists := s.metadata.blockIndex.Get(blockStat{firstKey: startKey})
 	if !exists {
 		return nil, ErrStartKeyNotFound
 	}
@@ -317,20 +322,20 @@ func (s *SegmentReader) readBlockWithStartKey(startKey []byte) (map[[512]byte][]
 	}
 
 	// read the rows
-	rows := map[[512]byte][]byte{}
+	var rows []KVPair
 	totalReadBytes := 0
 	for totalReadBytes < int(stat.originalSize) {
+		pair := KVPair{}
 		keyLen := binary.LittleEndian.Uint16(mustReadBytes(decompressedBlockBytes, 2))
 		totalReadBytes += 2
 		valueLen := binary.LittleEndian.Uint32(mustReadBytes(decompressedBlockBytes, 4))
 		totalReadBytes += 4
-		var key [512]byte
-		copy(key[:], mustReadBytes(decompressedBlockBytes, int(keyLen)))
+		pair.Key = mustReadBytes(decompressedBlockBytes, int(keyLen))
 		totalReadBytes += int(keyLen)
-		value := mustReadBytes(decompressedBlockBytes, int(valueLen))
+		pair.Value = mustReadBytes(decompressedBlockBytes, int(valueLen))
 		totalReadBytes += int(valueLen)
 
-		rows[key] = value
+		rows = append(rows, pair)
 	}
 
 	return rows, nil
