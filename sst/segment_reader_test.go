@@ -169,3 +169,5 @@ func TestReadReturnedMetadataZSTD(t *testing.T) {
 		t.Fatal("first key block hash")
 	}
 }
+
+// todo test probe bloom filter

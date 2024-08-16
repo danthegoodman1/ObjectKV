@@ -222,14 +222,19 @@ func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (map[[512]byte
 // Instantly returns true if no bloom filter exists.
 //
 // Fetches the metadata if not already loaded.
-func (s *SegmentReader) probeBloomFilter(key string) (bool, error) {
+func (s *SegmentReader) probeBloomFilter(key []byte) (bool, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
 		if err != nil {
 			return false, fmt.Errorf("error in FetchAndLoadMetadata: %w", err)
 		}
 	}
-	panic("todo")
+
+	if s.metadata.bloomFilter == nil {
+		return false, nil
+	}
+
+	return s.metadata.bloomFilter.Test(key), nil
 }
 
 var ErrNoMoreRows = errors.New("no more rows")
