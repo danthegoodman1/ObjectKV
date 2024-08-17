@@ -35,17 +35,17 @@ type (
 	}
 
 	SegmentMetadata struct {
-		bloomFilter *bloom.BloomFilter
+		BloomFilter *bloom.BloomFilter
 
 		// ZSTDCompression is the highest priority compression check
 		ZSTDCompression bool
 		// ZSTDCompression takes priority
 		LZ4Compression bool
 
-		firstKey []byte
-		lastKey  []byte
+		FirstKey []byte
+		LastKey  []byte
 
-		blockIndex *btree.BTreeG[blockStat]
+		BlockIndex *btree.BTreeG[BlockStat]
 	}
 )
 
@@ -131,14 +131,14 @@ func (s *SegmentReader) BytesToMetadata(metaBlockBytes []byte) (*SegmentMetadata
 
 	// read the first and last key
 	firstKeyLength := int(binary.LittleEndian.Uint16(mustReadBytes(metaReader, 2)))
-	metadata.firstKey = mustReadBytes(metaReader, firstKeyLength)
+	metadata.FirstKey = mustReadBytes(metaReader, firstKeyLength)
 	lastKeyLength := int(binary.LittleEndian.Uint16(mustReadBytes(metaReader, 2)))
-	metadata.lastKey = mustReadBytes(metaReader, lastKeyLength)
+	metadata.LastKey = mustReadBytes(metaReader, lastKeyLength)
 
 	var err error
 
 	// read bloom filter block
-	metadata.bloomFilter, err = s.parseBloomFilterBlock(metaReader)
+	metadata.BloomFilter, err = s.parseBloomFilterBlock(metaReader)
 	if err != nil {
 		return nil, fmt.Errorf("error in parseBloomFilterBlock: %w", err)
 	}
@@ -153,7 +153,7 @@ func (s *SegmentReader) BytesToMetadata(metaBlockBytes []byte) (*SegmentMetadata
 	}
 
 	// read the block index according to spec
-	metadata.blockIndex, err = s.parseBlockIndex(metaReader)
+	metadata.BlockIndex, err = s.parseBlockIndex(metaReader)
 	if err != nil {
 		return nil, fmt.Errorf("error in parseBlockIndex: %w", err)
 	}
@@ -184,7 +184,7 @@ func (s *SegmentReader) parseBloomFilterBlock(metaReader *bytes.Reader) (*bloom.
 // parseBlockIndex loads the block index into the SegmentReader's SegmentMetadata using the provided metaReader.
 //
 // It is assumed that the metaReader is Seeked to the start of the data block index
-func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (*btree.BTreeG[blockStat], error) {
+func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (*btree.BTreeG[BlockStat], error) {
 	// we only support simple block index now so can skip first byte
 	// metaReader.Seek(1, io.SeekCurrent)
 	mustReadBytes(metaReader, 1)
@@ -195,23 +195,23 @@ func (s *SegmentReader) parseBlockIndex(metaReader *bytes.Reader) (*btree.BTreeG
 		return nil, fmt.Errorf("%w: had no data block entries", ErrInvalidMetaBlock)
 	}
 
-	t := btree.NewG[blockStat](2, func(a, b blockStat) bool {
-		return bytes.Compare(a.firstKey, b.firstKey) == -1
+	t := btree.NewG[BlockStat](2, func(a, b BlockStat) bool {
+		return bytes.Compare(a.FirstKey, b.FirstKey) == -1
 	})
 
 	for i := 0; i < numEntries; i++ {
-		stat := blockStat{}
+		stat := BlockStat{}
 
 		// read first key length
 		keyLength := int(binary.LittleEndian.Uint16(mustReadBytes(metaReader, 2)))
 
 		// read all the data
-		stat.firstKey = mustReadBytes(metaReader, keyLength)
-		stat.offset = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
-		stat.blockSize = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
-		stat.originalSize = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
-		stat.compressedSize = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
-		stat.hash = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
+		stat.FirstKey = mustReadBytes(metaReader, keyLength)
+		stat.Offset = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
+		stat.BlockSize = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
+		stat.OriginalSize = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
+		stat.CompressedSize = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
+		stat.Hash = binary.LittleEndian.Uint64(mustReadBytes(metaReader, 8))
 		t.ReplaceOrInsert(stat)
 	}
 
@@ -231,11 +231,11 @@ func (s *SegmentReader) probeBloomFilter(key []byte) (bool, error) {
 		}
 	}
 
-	if s.metadata.bloomFilter == nil {
+	if s.metadata.BloomFilter == nil {
 		return false, nil
 	}
 
-	return s.metadata.bloomFilter.Test(key), nil
+	return s.metadata.BloomFilter.Test(key), nil
 }
 
 var ErrNoMoreRows = errors.New("no more rows")
@@ -253,8 +253,8 @@ func (s *SegmentReader) RowIter() (*RowIter, error) {
 	}
 
 	// collect all the blocks
-	var stats []blockStat
-	s.metadata.blockIndex.Ascend(func(item blockStat) bool {
+	var stats []BlockStat
+	s.metadata.BlockIndex.Ascend(func(item BlockStat) bool {
 		stats = append(stats, item)
 		return true
 	})
@@ -275,7 +275,7 @@ type KVPair struct {
 // Will error if the offset is not a valid block starting point.
 //
 // Fetches the metadata if not already loaded.
-func (s *SegmentReader) readBlockWithStat(stat blockStat) ([]KVPair, error) {
+func (s *SegmentReader) readBlockWithStat(stat BlockStat) ([]KVPair, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
 		if err != nil {
@@ -283,25 +283,25 @@ func (s *SegmentReader) readBlockWithStat(stat blockStat) ([]KVPair, error) {
 		}
 	}
 
-	_, err := s.reader.Seek(int64(stat.offset), io.SeekStart)
+	_, err := s.reader.Seek(int64(stat.Offset), io.SeekStart)
 	if err != nil {
 		return nil, fmt.Errorf("error in reader.Seek: %w", err)
 	}
 
 	// read the block into a reader
-	rawBlockBytes := make([]byte, stat.blockSize)
+	rawBlockBytes := make([]byte, stat.BlockSize)
 	bytesRead, err := s.reader.Read(rawBlockBytes)
 	if err != nil {
 		return nil, fmt.Errorf("error in reader.Read: %w", err)
 	}
-	if bytesRead != int(stat.blockSize) {
+	if bytesRead != int(stat.BlockSize) {
 		return nil, fmt.Errorf("%w when reading raw block bytes", ErrUnexpectedBytesRead)
 	}
 
 	decompressedBlockBytes := &bytes.Buffer{}
 	// if compressed, decompress it
 	if s.metadata.ZSTDCompression {
-		dec, err := zstd.NewReader(bytes.NewReader(rawBlockBytes[:stat.compressedSize]))
+		dec, err := zstd.NewReader(bytes.NewReader(rawBlockBytes[:stat.CompressedSize]))
 		if err != nil {
 			return nil, fmt.Errorf("error in zstd.NewReader: %w", err)
 		}
@@ -320,7 +320,7 @@ func (s *SegmentReader) readBlockWithStat(stat blockStat) ([]KVPair, error) {
 	// read the rows
 	var rows []KVPair
 	totalReadBytes := 0
-	for totalReadBytes < int(stat.originalSize) {
+	for totalReadBytes < int(stat.OriginalSize) {
 		pair := KVPair{}
 		keyLen := binary.LittleEndian.Uint16(mustReadBytes(decompressedBlockBytes, 2))
 		totalReadBytes += 2
@@ -348,8 +348,8 @@ func (s *SegmentReader) GetRow(key []byte) (KVPair, error) {
 	}
 
 	// find the last block first key before this
-	var stat *blockStat
-	s.metadata.blockIndex.DescendLessOrEqual(blockStat{firstKey: key}, func(item blockStat) bool {
+	var stat *BlockStat
+	s.metadata.BlockIndex.DescendLessOrEqual(BlockStat{FirstKey: key}, func(item BlockStat) bool {
 		stat = &item
 		return false
 	})
@@ -386,35 +386,35 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 	unboundEnd := bytes.Equal(end, []byte{0xff})
 
 	// find all blocks data could be in
-	stats := map[string]blockStat{} // map for dedupe
+	stats := map[string]BlockStat{} // map for dedupe
 
 	// for the start of the range, we get any block below it
 	if unboundStart {
-		s.metadata.blockIndex.AscendLessThan(blockStat{firstKey: end}, func(item blockStat) bool {
-			stats[string(item.firstKey)] = item
+		s.metadata.BlockIndex.AscendLessThan(BlockStat{FirstKey: end}, func(item BlockStat) bool {
+			stats[string(item.FirstKey)] = item
 			return true
 		})
 	} else {
-		s.metadata.blockIndex.DescendLessOrEqual(blockStat{firstKey: start}, func(item blockStat) bool {
-			stats[string(item.firstKey)] = item
-			return bytes.Compare(start, item.firstKey) <= 0
+		s.metadata.BlockIndex.DescendLessOrEqual(BlockStat{FirstKey: start}, func(item BlockStat) bool {
+			stats[string(item.FirstKey)] = item
+			return bytes.Compare(start, item.FirstKey) <= 0
 		})
 	}
 
 	// for the end of the range we have to walk down then up until we hit lower and higher edges
 	// need the first one below if it exists
-	s.metadata.blockIndex.DescendLessOrEqual(blockStat{firstKey: end}, func(item blockStat) bool {
-		stats[string(item.firstKey)] = item
+	s.metadata.BlockIndex.DescendLessOrEqual(BlockStat{FirstKey: end}, func(item BlockStat) bool {
+		stats[string(item.FirstKey)] = item
 		return false
 	})
 
 	// walk up
-	s.metadata.blockIndex.AscendGreaterOrEqual(blockStat{firstKey: end}, func(item blockStat) bool {
-		if !unboundEnd && bytes.Compare(end, item.firstKey) <= 0 {
+	s.metadata.BlockIndex.AscendGreaterOrEqual(BlockStat{FirstKey: end}, func(item BlockStat) bool {
+		if !unboundEnd && bytes.Compare(end, item.FirstKey) <= 0 {
 			// our key is less than the first of this block
 			return false
 		}
-		stats[string(item.firstKey)] = item
+		stats[string(item.FirstKey)] = item
 		return true
 	})
 
@@ -423,7 +423,7 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 	for _, stat := range stats {
 		blockRows, err := s.readBlockWithStat(stat)
 		if err != nil {
-			return nil, fmt.Errorf("error in readBlockWithStat for offset %d: %w", stat.offset, err)
+			return nil, fmt.Errorf("error in readBlockWithStat for offset %d: %w", stat.Offset, err)
 		}
 		for _, row := range blockRows {
 			// unbound start works this way too

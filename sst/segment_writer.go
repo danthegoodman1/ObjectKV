@@ -22,7 +22,7 @@ type (
 		externalWriter io.Writer
 
 		currentByteOffset uint64 // where we are in the file currently, used for block index
-		blockIndex        []blockStat
+		blockIndex        []BlockStat
 		lastKey           []byte
 
 		options SegmentWriterOptions
@@ -38,7 +38,7 @@ func NewSegmentWriter(writer io.Writer, opts SegmentWriterOptions) SegmentWriter
 	sw := SegmentWriter{
 		options:        opts,
 		externalWriter: writer,
-		blockIndex:     []blockStat{},
+		blockIndex:     []BlockStat{},
 	}
 
 	return sw
@@ -130,13 +130,13 @@ func (s *SegmentWriter) flushCurrentDataBlock() error {
 	}
 
 	// write the metadata to memory for the block start with offset and first key
-	stat := blockStat{
-		offset:       s.currentByteOffset,
-		originalSize: s.currentRawBlockSize,
-		firstKey:     s.currentBlockStartKey,
+	stat := BlockStat{
+		Offset:       s.currentByteOffset,
+		OriginalSize: s.currentRawBlockSize,
+		FirstKey:     s.currentBlockStartKey,
 	}
 	if useZSTD || useLZ4 {
-		stat.compressedSize = uint64(s.blockBuffer.Len())
+		stat.CompressedSize = uint64(s.blockBuffer.Len())
 	}
 
 	if remainder := s.options.DataBlockSize - uint64(s.blockBuffer.Len())%s.options.DataBlockSize; remainder > 0 {
@@ -150,13 +150,13 @@ func (s *SegmentWriter) flushCurrentDataBlock() error {
 		}
 	}
 
-	stat.blockSize = uint64(s.blockBuffer.Len())
+	stat.BlockSize = uint64(s.blockBuffer.Len())
 
 	blockBytes := s.blockBuffer.Bytes()
 
 	// capture a blockHash of the final block bytes
 	blockHash := xxhash.Sum64(blockBytes)
-	stat.hash = blockHash
+	stat.Hash = blockHash
 
 	s.blockIndex = append(s.blockIndex, stat)
 
@@ -247,7 +247,7 @@ func (s *SegmentWriter) generateMetaBlock() []byte {
 	var metaBlock bytes.Buffer
 
 	// write the first and last key
-	firstKey := s.blockIndex[0].firstKey
+	firstKey := s.blockIndex[0].FirstKey
 	metaBlock.Write(binary.LittleEndian.AppendUint16([]byte{}, uint16(len(firstKey))))
 	metaBlock.Write(firstKey)
 	metaBlock.Write(binary.LittleEndian.AppendUint16([]byte{}, uint16(len(s.lastKey))))

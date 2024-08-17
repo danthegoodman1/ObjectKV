@@ -6,37 +6,37 @@ import (
 )
 
 type (
-	blockStat struct {
-		firstKey []byte
+	BlockStat struct {
+		FirstKey []byte
 		// where in the file this block starts (post compression)
-		offset uint64
+		Offset uint64
 		// final block byte size (incl padding)
-		blockSize uint64
+		BlockSize uint64
 		// original size needed for loading into mem (decompression target or direct load)
-		originalSize uint64
+		OriginalSize uint64
 		// size of the block after compression, used for decompression
 		//
 		// 0 if not compressed
-		compressedSize uint64
+		CompressedSize uint64
 		// final block bytes hash (incl compression)
-		hash uint64
+		Hash uint64
 	}
 )
 
 // toBytes returns a byte array according to the spec at SEGMENT.md
-func (bs blockStat) toBytes() []byte {
+func (bs BlockStat) toBytes() []byte {
 	blockBytes := bytes.Buffer{}
 
 	// add the block's first key info
-	blockBytes.Write(binary.LittleEndian.AppendUint16([]byte{}, uint16(len(bs.firstKey))))
-	blockBytes.Write(bs.firstKey)
+	blockBytes.Write(binary.LittleEndian.AppendUint16([]byte{}, uint16(len(bs.FirstKey))))
+	blockBytes.Write(bs.FirstKey)
 
 	// write metadata about the data block
-	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.offset))
-	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.blockSize))
-	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.originalSize))
-	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.compressedSize))
-	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.hash))
+	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.Offset))
+	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.BlockSize))
+	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.OriginalSize))
+	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.CompressedSize))
+	blockBytes.Write(binary.LittleEndian.AppendUint64([]byte{}, bs.Hash))
 
 	return blockBytes.Bytes()
 }

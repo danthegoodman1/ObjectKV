@@ -2,7 +2,6 @@ package sst
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"testing"
@@ -32,7 +31,7 @@ func TestSegmentWriterNoCompression(t *testing.T) {
 	}
 	delta := time.Since(s)
 	t.Log("Wrote", totalBytes, "in", delta, fmt.Sprintf("%.2fMB/s", float64(totalBytes)/1_000_000/delta.Seconds())) // 22MB/s
-	t.Log(hex.EncodeToString(b.Bytes()))
+	// t.Log(hex.EncodeToString(b.Bytes()))
 	t.Log("Got segment length", segmentLen)
 }
 
@@ -98,6 +97,6 @@ func TestSegmentWriterLargerThanBlock(t *testing.T) {
 	}
 	delta := time.Since(s)
 	t.Log("Wrote", totalBytes, "in", delta, fmt.Sprintf("%.2fMB/s", float64(totalBytes)/1_000_000/delta.Seconds())) // 22MB/s
-	t.Log(hex.EncodeToString(b.Bytes()))
+	// t.Log(hex.EncodeToString(b.Bytes()))
 	t.Log("Got segment length", segmentLen)
 }

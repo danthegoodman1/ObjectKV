@@ -2,7 +2,6 @@ package sst
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"testing"
@@ -35,7 +34,7 @@ func TestReadUncompressed(t *testing.T) {
 
 	t.Logf("Got %d metadata bytes", len(metadataBytes))
 
-	t.Log("metadata byte hex", hex.EncodeToString(metadataBytes))
+	// t.Log("metadata byte hex", hex.EncodeToString(metadataBytes))
 
 	// Read the bytes
 	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength), DefaultSegmentReaderOptions())
@@ -51,16 +50,16 @@ func TestReadUncompressed(t *testing.T) {
 	lastKey := "key199"
 	lastValue := "value199"
 
-	t.Log(string(metadata.firstKey), string(metadata.lastKey))
-	if string(metadata.firstKey) != firstKey {
+	t.Log(string(metadata.FirstKey), string(metadata.LastKey))
+	if string(metadata.FirstKey) != firstKey {
 		t.Fatal("first key mismatch")
 	}
-	if string(metadata.lastKey) != lastKey {
+	if string(metadata.LastKey) != lastKey {
 		t.Fatal("last key mismatch")
 	}
 
-	metadata.blockIndex.Ascend(func(item blockStat) bool {
-		t.Log(string(item.firstKey), fmt.Sprintf("%+v", item))
+	metadata.BlockIndex.Ascend(func(item BlockStat) bool {
+		t.Log(string(item.FirstKey), fmt.Sprintf("%+v", item))
 		return true
 	})
 
@@ -68,38 +67,38 @@ func TestReadUncompressed(t *testing.T) {
 	copy(firstKeyBytes[:], firstKey)
 	copy(secondBlockKeyBytes[:], secondBlockFirstKey)
 
-	if metadata.blockIndex.Len() != 2 {
+	if metadata.BlockIndex.Len() != 2 {
 		t.Fatal("unexpected block index size")
 	}
 
-	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); string(item.firstKey) != firstKey {
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)}); string(item.FirstKey) != firstKey {
 		t.Fatal("first block invalid first key")
 	}
-	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); item.originalSize != 3600 {
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)}); item.OriginalSize != 3600 {
 		t.Fatal("first key block invalid raw bytes")
 	}
-	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); item.compressedSize != 0 {
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)}); item.CompressedSize != 0 {
 		t.Fatal("first key block invalid compressed bytes")
 	}
-	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); int(item.offset) != 0 {
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)}); int(item.Offset) != 0 {
 		t.Fatal("first key block invalid offset")
 	}
 
-	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(secondBlockFirstKey)}); string(item.firstKey) != secondBlockFirstKey {
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(secondBlockFirstKey)}); string(item.FirstKey) != secondBlockFirstKey {
 		t.Fatal("second block invalid first key")
 	}
-	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(secondBlockFirstKey)}); item.originalSize != 400 {
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(secondBlockFirstKey)}); item.OriginalSize != 400 {
 		t.Fatal("second block invalid raw bytes")
 	}
-	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(secondBlockFirstKey)}); item.compressedSize != 0 {
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(secondBlockFirstKey)}); item.CompressedSize != 0 {
 		t.Fatal("second block invalid compressed bytes")
 	}
-	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(secondBlockFirstKey)}); int(item.offset) != 4096 {
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(secondBlockFirstKey)}); int(item.Offset) != 4096 {
 		t.Fatal("second block invalid offset")
 	}
 
 	// Read block data
-	item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)})
+	item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)})
 	rows, err := r.readBlockWithStat(item)
 	if err != nil {
 		t.Fatal(err)
@@ -115,7 +114,7 @@ func TestReadUncompressed(t *testing.T) {
 	}
 
 	// read the second block
-	item, _ = metadata.blockIndex.Get(blockStat{firstKey: []byte(secondBlockFirstKey)})
+	item, _ = metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(secondBlockFirstKey)})
 	secondRows, err := r.readBlockWithStat(item)
 	if err != nil {
 		t.Fatal(err)
@@ -280,7 +279,7 @@ func TestReadCompressionZSTD(t *testing.T) {
 
 	t.Logf("Got %d metadata bytes", len(metadataBytes))
 
-	t.Log("metadata byte hex", hex.EncodeToString(metadataBytes))
+	// t.Log("metadata byte hex", hex.EncodeToString(metadataBytes))
 
 	// Read the bytes
 	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength), DefaultSegmentReaderOptions())
@@ -294,42 +293,42 @@ func TestReadCompressionZSTD(t *testing.T) {
 	lastKey := "key199"
 	lastValue := "value199"
 
-	t.Log(string(metadata.firstKey), string(metadata.lastKey))
-	if string(metadata.firstKey) != firstKey {
+	t.Log(string(metadata.FirstKey), string(metadata.LastKey))
+	if string(metadata.FirstKey) != firstKey {
 		t.Fatal("first key mismatch")
 	}
-	if string(metadata.lastKey) != lastKey {
+	if string(metadata.LastKey) != lastKey {
 		t.Fatal("last key mismatch")
 	}
 
-	metadata.blockIndex.Ascend(func(item blockStat) bool {
-		t.Log(string(item.firstKey), fmt.Sprintf("%+v", item))
+	metadata.BlockIndex.Ascend(func(item BlockStat) bool {
+		t.Log(string(item.FirstKey), fmt.Sprintf("%+v", item))
 		return true
 	})
 
-	if metadata.blockIndex.Len() != 1 {
+	if metadata.BlockIndex.Len() != 1 {
 		t.Fatal("unexpected block index size")
 	}
 
-	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); string(item.firstKey) != firstKey {
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)}); string(item.FirstKey) != firstKey {
 		t.Fatal("first block invalid first key")
 	}
-	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); item.originalSize != 4000 {
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)}); item.OriginalSize != 4000 {
 		t.Fatal("first key block invalid raw bytes")
 	}
-	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); item.compressedSize != 298 {
-		// if metadata.blockIndex[firstKeyBytes].compressedSize != 29 {
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)}); item.CompressedSize != 298 {
+		// if metadata.BlockIndex[firstKeyBytes].compressedSize != 29 {
 		t.Fatal("first key block invalid compressed bytes")
 	}
-	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); int(item.offset) != 0 {
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)}); int(item.Offset) != 0 {
 		t.Fatal("first key block invalid offset")
 	}
-	if item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)}); item.hash != 7503979350938866005 {
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)}); item.Hash != 7503979350938866005 {
 		t.Fatal("first key block hash invalid")
 	}
 
 	// Read block data
-	item, _ := metadata.blockIndex.Get(blockStat{firstKey: []byte(firstKey)})
+	item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)})
 	rows, err := r.readBlockWithStat(item)
 	if err != nil {
 		t.Fatal(err)

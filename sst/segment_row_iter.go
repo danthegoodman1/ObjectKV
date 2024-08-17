@@ -26,15 +26,15 @@ func (r *RowIter) Next() (KVPair, error) {
 	}
 
 	// otherwise we need to load the next block's rows
-	var stat blockStat
-	r.s.metadata.blockIndex.AscendGreaterOrEqual(blockStat{firstKey: r.statLastKey}, func(item blockStat) bool {
-		if bytes.Equal(r.statLastKey, item.firstKey) {
+	var stat BlockStat
+	r.s.metadata.BlockIndex.AscendGreaterOrEqual(BlockStat{FirstKey: r.statLastKey}, func(item BlockStat) bool {
+		if bytes.Equal(r.statLastKey, item.FirstKey) {
 			// keep going, this is the same key
 			return true
 		}
 
 		// Otherwise we take it and exit (next stat)
-		r.statLastKey = item.firstKey
+		r.statLastKey = item.FirstKey
 		stat = item
 		return false
 	})
