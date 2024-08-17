@@ -252,6 +252,185 @@ func TestReadUncompressed(t *testing.T) {
 	}
 }
 
+func TestReadSingleRecordUncompressed(t *testing.T) {
+	b := &bytes.Buffer{}
+	opts := DefaultSegmentWriterOptions()
+	opts.BloomFilter = nil
+	w := NewSegmentWriter(b, opts)
+
+	totalBytes := 0
+	s := time.Now()
+	for i := 0; i < 1; i++ {
+		key := []byte(fmt.Sprintf("key%03d", i))
+		val := []byte(fmt.Sprintf("value%03d", i))
+		err := w.WriteRow(key, val)
+		if err != nil {
+			t.Fatal(err)
+		}
+		totalBytes += len(key) + len(val)
+	}
+	segmentLength, metadataBytes, err := w.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta := time.Since(s)
+	t.Log("Wrote", totalBytes, "in", delta, fmt.Sprintf("%.2fMB/s", float64(totalBytes)/1_000_000/delta.Seconds())) // 22MB/s
+
+	t.Logf("Got %d metadata bytes", len(metadataBytes))
+
+	// Read the bytes
+	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength), DefaultSegmentReaderOptions())
+	metadata, err := r.BytesToMetadata(metadataBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	firstKey := "key000"
+	lastKey := firstKey
+	firstValue := "value000"
+	lastValue := firstValue
+
+	t.Log(string(metadata.FirstKey), string(metadata.LastKey))
+	if string(metadata.FirstKey) != firstKey {
+		t.Fatal("first key mismatch")
+	}
+	if string(metadata.LastKey) != lastKey {
+		t.Fatal("last key mismatch")
+	}
+
+	metadata.BlockIndex.Ascend(func(item BlockStat) bool {
+		t.Log(string(item.FirstKey), fmt.Sprintf("%+v", item))
+		return true
+	})
+
+	var firstKeyBytes [512]byte
+	copy(firstKeyBytes[:], firstKey)
+
+	if metadata.BlockIndex.Len() != 1 {
+		t.Fatal("unexpected block index size")
+	}
+
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)}); string(item.FirstKey) != firstKey {
+		t.Fatal("first block invalid first key")
+	}
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)}); item.OriginalSize != 20 {
+		t.Fatal("first key block invalid raw bytes")
+	}
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)}); item.CompressedSize != 0 {
+		t.Fatal("first key block invalid compressed bytes")
+	}
+	if item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)}); int(item.Offset) != 0 {
+		t.Fatal("first key block invalid offset")
+	}
+
+	// Read block data
+	item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)})
+	rows, err := r.ReadBlockWithStat(item)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Read", len(rows), "rows")
+
+	if string(rows[0].Key) != firstKey {
+		t.Fatal("first key didn't match")
+	}
+	if string(rows[0].Value) != firstValue {
+		t.Fatal("first value didn't match")
+	}
+
+	if string(rows[len(rows)-1].Key) != lastKey {
+		t.Fatal("last key didn't match")
+	}
+	if string(rows[len(rows)-1].Value) != lastValue {
+		t.Fatal("last value didn't match")
+	}
+
+	// read some rows
+	row, err := r.GetRow([]byte(firstKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(row.Key, []byte(firstKey)) {
+		t.Fatal("first key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte(firstValue)) {
+		t.Fatal("first value bytes not equal")
+	}
+
+	row, err = r.GetRow([]byte("fuhguiregui"))
+	if !errors.Is(err, ErrNoRows) && err != nil {
+		t.Fatal("got something else", row, err)
+	}
+
+	row, err = r.GetRow([]byte(lastKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(row.Key, []byte(lastKey)) {
+		t.Fatal("last key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte(lastValue)) {
+		t.Fatal("last value bytes not equal")
+	}
+
+	// Read a range
+	rows, err = r.GetRange([]byte(firstKey), []byte(lastKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(rows) != 0 {
+		t.Fatal("did not get 0 rows, got", len(rows))
+	}
+
+	rows, err = r.GetRange([]byte{}, []byte(lastKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(rows) != 0 {
+		t.Fatal("did not get 0 rows, got", len(rows))
+	}
+
+	// test unbound ranges
+	rows, err = r.GetRange([]byte{}, []byte{0xff})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(rows) != 1 {
+		t.Fatal("did not get 1 rows, got", len(rows))
+	}
+	if !bytes.Equal(rows[0].Key, []byte(lastKey)) {
+		t.Fatal("first row did not match lastKey")
+	}
+	if !bytes.Equal(rows[0].Value, []byte(lastValue)) {
+		t.Fatal("first row did not match last value")
+	}
+	if !bytes.Equal(rows[0].Key, []byte(firstKey)) {
+		t.Fatal("first row did not match firstKey")
+	}
+	if !bytes.Equal(rows[0].Value, []byte(firstValue)) {
+		t.Fatal("first row did not match first value")
+	}
+
+	rows, err = r.GetRange([]byte(lastKey), []byte{0xff})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(rows) != 1 {
+		t.Fatal("did not get 1 rows, got", len(rows))
+	}
+	if !bytes.Equal(rows[0].Key, []byte(lastKey)) {
+		t.Fatal("first row did not match last key")
+	}
+	if !bytes.Equal(rows[0].Value, []byte(lastValue)) {
+		t.Fatal("first row did not match last value")
+	}
+}
+
 func TestReadCompressionZSTD(t *testing.T) {
 	b := &bytes.Buffer{}
 	opts := DefaultSegmentWriterOptions()
