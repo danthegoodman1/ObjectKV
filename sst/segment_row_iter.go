@@ -38,9 +38,9 @@ func (r *RowIter) Next() (KVPair, error) {
 		stat = item
 		return false
 	})
-	rows, err := r.s.readBlockWithStat(stat)
+	rows, err := r.s.ReadBlockWithStat(stat)
 	if err != nil {
-		return KVPair{}, fmt.Errorf("error in SegmentReader.readBlockWithStat: %w", err)
+		return KVPair{}, fmt.Errorf("error in SegmentReader.ReadBlockWithStat: %w", err)
 	}
 
 	r.blockRows = rows

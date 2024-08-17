@@ -99,7 +99,7 @@ func TestReadUncompressed(t *testing.T) {
 
 	// Read block data
 	item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)})
-	rows, err := r.readBlockWithStat(item)
+	rows, err := r.ReadBlockWithStat(item)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestReadUncompressed(t *testing.T) {
 
 	// read the second block
 	item, _ = metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(secondBlockFirstKey)})
-	secondRows, err := r.readBlockWithStat(item)
+	secondRows, err := r.ReadBlockWithStat(item)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ func TestReadCompressionZSTD(t *testing.T) {
 
 	// Read block data
 	item, _ := metadata.BlockIndex.Get(BlockStat{FirstKey: []byte(firstKey)})
-	rows, err := r.readBlockWithStat(item)
+	rows, err := r.ReadBlockWithStat(item)
 	if err != nil {
 		t.Fatal(err)
 	}

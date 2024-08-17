@@ -271,12 +271,12 @@ type KVPair struct {
 	Value []byte
 }
 
-// readBlockWithStat will read a data block at an offset, decompress and deserialize it.
+// ReadBlockWithStat will read a data block at an offset, decompress and deserialize it.
 //
 // Will error if the offset is not a valid block starting point.
 //
 // Fetches the metadata if not already loaded.
-func (s *SegmentReader) readBlockWithStat(stat BlockStat) ([]KVPair, error) {
+func (s *SegmentReader) ReadBlockWithStat(stat BlockStat) ([]KVPair, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
 		if err != nil {
@@ -361,7 +361,7 @@ func (s *SegmentReader) GetRow(key []byte) (KVPair, error) {
 	}
 
 	// otherwise we have the block it might be in
-	blockRows, err := s.readBlockWithStat(*stat)
+	blockRows, err := s.ReadBlockWithStat(*stat)
 	if err != nil {
 		return KVPair{}, fmt.Errorf("error in readBlockWithFirstKey: %w", err)
 	}
@@ -424,9 +424,9 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 	var inclRows []KVPair
 	// for each block, get everything that is in the range
 	for _, stat := range stats {
-		blockRows, err := s.readBlockWithStat(stat)
+		blockRows, err := s.ReadBlockWithStat(stat)
 		if err != nil {
-			return nil, fmt.Errorf("error in readBlockWithStat for offset %d: %w", stat.Offset, err)
+			return nil, fmt.Errorf("error in ReadBlockWithStat for offset %d: %w", stat.Offset, err)
 		}
 		for _, row := range blockRows {
 			// unbound start works this way too
