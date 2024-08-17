@@ -244,6 +244,7 @@ var ErrNoMoreRows = errors.New("no more rows")
 // as this just starts loading blocks and returning rows.
 //
 // Fetches the metadata if not already loaded.
+// todo delete this method - this should be higher level
 func (s *SegmentReader) RowIter() (*RowIter, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
@@ -252,7 +253,7 @@ func (s *SegmentReader) RowIter() (*RowIter, error) {
 		}
 	}
 
-	// collect all the blocks
+	// collect necessary blocks
 	var stats []BlockStat
 	s.metadata.BlockIndex.Ascend(func(item BlockStat) bool {
 		stats = append(stats, item)
@@ -339,6 +340,7 @@ func (s *SegmentReader) readBlockWithStat(stat BlockStat) ([]KVPair, error) {
 
 var ErrNoRows = errors.New("no rows found")
 
+// todo delete this method - this should be higher level
 func (s *SegmentReader) GetRow(key []byte) (KVPair, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
@@ -374,6 +376,7 @@ func (s *SegmentReader) GetRow(key []byte) (KVPair, error) {
 }
 
 // GetRange will get the range of keys [start, end) from the segment.
+// todo delete this method - this should be higher level
 func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
