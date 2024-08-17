@@ -261,7 +261,6 @@ func (s *SegmentReader) RowIter() (*RowIter, error) {
 
 	return &RowIter{
 		reader: s.reader,
-		stats:  stats,
 		s:      s,
 	}, nil
 }
