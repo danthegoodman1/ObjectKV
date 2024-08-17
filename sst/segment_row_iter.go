@@ -35,6 +35,7 @@ func (r *RowIter) Next() (KVPair, error) {
 
 		// Otherwise we take it and exit (next stat)
 		r.statLastKey = item.firstKey
+		stat = item
 		return false
 	})
 	rows, err := r.s.readBlockWithStat(stat)
