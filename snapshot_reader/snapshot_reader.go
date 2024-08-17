@@ -64,6 +64,7 @@ func (sr *SnapshotReader) DropSegment(segmentID string) {
 func (sr *SnapshotReader) GetKey(key []byte) ([]byte, error) {
 	// todo see sst.SegmentReader.GetKey impl
 	// todo if no metadata, fetch on-demand
+	// todo check blocks in order of (asc level, desc ID)
 	panic("todo")
 }
 
