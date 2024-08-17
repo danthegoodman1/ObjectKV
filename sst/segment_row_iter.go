@@ -26,7 +26,7 @@ func (r *RowIter) Next() (KVPair, error) {
 	}
 
 	// otherwise we need to load the next block's rows
-	var stat BlockStat
+	var stat *BlockStat
 	r.s.metadata.BlockIndex.AscendGreaterOrEqual(BlockStat{FirstKey: r.statLastKey}, func(item BlockStat) bool {
 		if bytes.Equal(r.statLastKey, item.FirstKey) {
 			// keep going, this is the same key
@@ -35,10 +35,16 @@ func (r *RowIter) Next() (KVPair, error) {
 
 		// Otherwise we take it and exit (next stat)
 		r.statLastKey = item.FirstKey
-		stat = item
+		stat = &item
 		return false
 	})
-	rows, err := r.s.ReadBlockWithStat(stat)
+
+	if stat == nil {
+		// there are no more blocks
+		return KVPair{}, io.EOF
+	}
+
+	rows, err := r.s.ReadBlockWithStat(*stat)
 	if err != nil {
 		return KVPair{}, fmt.Errorf("error in SegmentReader.ReadBlockWithStat: %w", err)
 	}

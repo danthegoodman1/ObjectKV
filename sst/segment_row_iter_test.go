@@ -3,7 +3,9 @@ package sst
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 )
@@ -77,5 +79,10 @@ func TestRowIter(t *testing.T) {
 	}
 	if !bytes.Equal(row.Value, []byte("value199")) {
 		t.Fatal("second row value bytes not equal")
+	}
+
+	row, err = iter.Next()
+	if !errors.Is(err, io.EOF) {
+		t.Fatal("got unexpected error value", err)
 	}
 }
