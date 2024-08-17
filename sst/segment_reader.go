@@ -240,15 +240,11 @@ func (s *SegmentReader) probeBloomFilter(key []byte) (bool, error) {
 
 var ErrNoMoreRows = errors.New("no more rows")
 
-// RowIter creates a new row iterator. This should only really be used for compaction, as this just starts loading
-// blocks and returning rows.
-//
-// Returns io.EOF when there are no more rows.
+// RowIter creates a new row iterator. This should only really be used for compaction,
+// as this just starts loading blocks and returning rows.
 //
 // Fetches the metadata if not already loaded.
-//
-// TODO this can be done logically by just reading blocks
-func (s *SegmentReader) RowIter() ([]any, error) {
+func (s *SegmentReader) RowIter() (*RowIter, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
 		if err != nil {
@@ -256,8 +252,18 @@ func (s *SegmentReader) RowIter() ([]any, error) {
 		}
 	}
 
-	// todo read block starting at offset
-	panic("todo")
+	// collect all the blocks
+	var stats []blockStat
+	s.metadata.blockIndex.Ascend(func(item blockStat) bool {
+		stats = append(stats, item)
+		return true
+	})
+
+	return &RowIter{
+		reader: s.reader,
+		stats:  stats,
+		s:      s,
+	}, nil
 }
 
 type KVPair struct {
