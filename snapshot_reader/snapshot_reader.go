@@ -8,15 +8,15 @@ import (
 )
 
 type (
-	SnapshotReader struct {
+	Reader struct {
 		segmentIDTree  *btree.BTreeG[SegmentRecord]
 		blockRangeTree *btree.BTreeG[SegmentRecord]
 		indexMu        *sync.RWMutex
-		readerFactory  ReaderFactoryFunc
+		readerFactory  SegmentReaderFactoryFunc
 	}
 
-	// ReaderFactoryFunc is used to create the readers for segment files. May be used to read data or metadata.
-	ReaderFactoryFunc func(record SegmentRecord) (*sst.SegmentReader, error)
+	// SegmentReaderFactoryFunc is used to create the readers for segment files. May be used to read data or metadata.
+	SegmentReaderFactoryFunc func(record SegmentRecord) (*sst.SegmentReader, error)
 )
 
 const (
@@ -24,8 +24,8 @@ const (
 	DirectionReverse
 )
 
-func NewSnapshotReader(f ReaderFactoryFunc) *SnapshotReader {
-	sr := &SnapshotReader{
+func NewReader(f SegmentReaderFactoryFunc) *Reader {
+	sr := &Reader{
 		segmentIDTree: btree.NewG[SegmentRecord](2, func(a, b SegmentRecord) bool {
 			return a.ID < b.ID
 		}),
@@ -43,25 +43,25 @@ func NewSnapshotReader(f ReaderFactoryFunc) *SnapshotReader {
 // Segments should only be added once fully durable and available to read.
 //
 // To reduce memory usage, you can opt to use a nil value for the sst.Metadata.BlockIndex,
-// and SnapshotReader will fetch metadata on-demand and use for data block-level filtering.
-func (sr *SnapshotReader) AddSegment(record SegmentRecord) {
-	sr.indexMu.Lock()
-	defer sr.indexMu.Unlock()
+// and Reader will fetch metadata on-demand and use for data block-level filtering.
+func (r *Reader) AddSegment(record SegmentRecord) {
+	r.indexMu.Lock()
+	defer r.indexMu.Unlock()
 	// todo add to segment tree
 	// todo add to block range tree
 	panic("todo")
 }
 
-func (sr *SnapshotReader) DropSegment(segmentID string) {
-	sr.indexMu.Lock()
-	defer sr.indexMu.Unlock()
+func (r *Reader) DropSegment(segmentID string) {
+	r.indexMu.Lock()
+	defer r.indexMu.Unlock()
 	// todo lookup in segment tree
 	// todo drop from segment tree
 	// todo drop from block range tree
 	panic("todo")
 }
 
-func (sr *SnapshotReader) GetRow(key []byte) ([]byte, error) {
+func (r *Reader) GetRow(key []byte) ([]byte, error) {
 	// todo see sst.SegmentReader.GetRow impl
 	// todo figure out relevant blocks
 	// todo if no metadata, fetch on-demand
@@ -69,7 +69,7 @@ func (sr *SnapshotReader) GetRow(key []byte) ([]byte, error) {
 	panic("todo")
 }
 
-func (sr *SnapshotReader) GetRange(start []byte, end []byte, limit, direction int) ([]sst.KVPair, error) {
+func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst.KVPair, error) {
 	// todo see sst.SegmentReader.GetRange impl
 	// todo if no metadata, fetch on-demand
 	// todo get row iters for all potential blocks
@@ -79,6 +79,8 @@ func (sr *SnapshotReader) GetRange(start []byte, end []byte, limit, direction in
 	panic("todo")
 }
 
-func (sr *SnapshotReader) RowIter(start []byte, direction int) {
-
+func (r *Reader) RowIter(start []byte, direction int) *Iter {
+	return &Iter{
+		reader: r,
+	}
 }

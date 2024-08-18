@@ -2,7 +2,6 @@ package sst
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -35,8 +34,6 @@ func TestRowIter(t *testing.T) {
 	t.Log("Wrote", totalBytes, "in", delta, fmt.Sprintf("%.2fMB/s", float64(totalBytes)/1_000_000/delta.Seconds())) // 22MB/s
 
 	t.Logf("Got %d metadata bytes", len(metadataBytes))
-
-	t.Log("metadata byte hex", hex.EncodeToString(metadataBytes))
 
 	// Read the bytes
 	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength), DefaultSegmentReaderOptions())
