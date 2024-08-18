@@ -61,8 +61,9 @@ func (sr *SnapshotReader) DropSegment(segmentID string) {
 	panic("todo")
 }
 
-func (sr *SnapshotReader) GetKey(key []byte) ([]byte, error) {
-	// todo see sst.SegmentReader.GetKey impl
+func (sr *SnapshotReader) GetRow(key []byte) ([]byte, error) {
+	// todo see sst.SegmentReader.GetRow impl
+	// todo figure out relevant blocks
 	// todo if no metadata, fetch on-demand
 	// todo check blocks in order of (asc level, desc ID)
 	panic("todo")
