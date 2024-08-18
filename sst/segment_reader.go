@@ -245,8 +245,6 @@ func (s *SegmentReader) probeBloomFilter(key []byte) (bool, error) {
 	return s.metadata.BloomFilter.Test(key), nil
 }
 
-var ErrNoMoreRows = errors.New("no more rows")
-
 // RowIter creates a new row iterator. This should only really be used for compaction and higher-level range reading,
 // as this just starts loading blocks and returning rows.
 //
