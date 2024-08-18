@@ -49,6 +49,13 @@ type (
 	}
 )
 
+var (
+	// UnboundStart indicates that the range should go all the way to the first key
+	UnboundStart []byte
+	// UnboundEnd indicates that the range should go all the way to the last key
+	UnboundEnd = []byte{0xff}
+)
+
 func NewSegmentReader(reader io.ReadSeeker, fileBytes int, opts SegmentReaderOptions) SegmentReader {
 	sr := SegmentReader{
 		options:   opts,
@@ -394,14 +401,14 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 		}
 	}
 
-	unboundStart := bytes.Equal(start, []byte{})
-	unboundEnd := bytes.Equal(end, []byte{0xff})
+	isUnboundStart := bytes.Equal(start, UnboundStart)
+	isUnboundEnd := bytes.Equal(end, UnboundEnd)
 
 	// find all blocks data could be in
 	stats := map[string]BlockStat{} // map for dedupe
 
 	// for the start of the range, we get any block below it
-	if unboundStart {
+	if isUnboundStart {
 		s.metadata.BlockIndex.AscendLessThan(BlockStat{FirstKey: end}, func(item BlockStat) bool {
 			stats[string(item.FirstKey)] = item
 			return true
@@ -422,7 +429,7 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 
 	// walk up
 	s.metadata.BlockIndex.AscendGreaterOrEqual(BlockStat{FirstKey: end}, func(item BlockStat) bool {
-		if !unboundEnd && bytes.Compare(end, item.FirstKey) <= 0 {
+		if !isUnboundEnd && bytes.Compare(end, item.FirstKey) <= 0 {
 			// our key is less than the first of this block
 			return false
 		}
@@ -440,7 +447,7 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 		for _, row := range blockRows {
 			// unbound start works this way too
 			if bytes.Compare(start, row.Key) <= 0 {
-				if !unboundEnd && bytes.Compare(row.Key, end) >= 0 {
+				if !isUnboundEnd && bytes.Compare(row.Key, end) >= 0 {
 					// if the end is greater than or eq to the current row, break
 					break
 				}

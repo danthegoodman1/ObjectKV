@@ -56,6 +56,9 @@ func (r *Reader) UpdateSegments(add []SegmentRecord, drop []SegmentRecord) {
 	// todo add to block range tree
 }
 
+// GetRow will fetch a single row, returning sst.ErrNoRows if not found.
+//
+// Runs on a snapshot of segments when invoked, can run concurrently with segment updates.
 func (r *Reader) GetRow(key []byte) ([]byte, error) {
 	// todo see sst.SegmentReader.GetRow impl
 	// todo figure out relevant blocks
@@ -63,6 +66,12 @@ func (r *Reader) GetRow(key []byte) ([]byte, error) {
 	panic("todo")
 }
 
+// GetRange will fetch a range of rows up to a limit, starting from some direction.
+// Internally it uses RowIter, and is a convenience wrapper around it.
+//
+// Runs on a snapshot of segments when invoked, can run concurrently with segment updates.
+//
+// See sst.UnboundStart and sst.UnboundEnd helper vars
 func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst.KVPair, error) {
 	// todo see sst.SegmentReader.GetRange impl
 	// todo get row iters for all potential blocks
@@ -72,6 +81,9 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 	panic("todo")
 }
 
+// RowIter creates a new row iter for a given range.
+//
+// See sst.UnboundStart and sst.UnboundEnd helper vars
 func (r *Reader) RowIter(start []byte, end []byte, direction int) *Iter {
 	// todo figure out blocks needed to read from snapshot
 	return &Iter{
