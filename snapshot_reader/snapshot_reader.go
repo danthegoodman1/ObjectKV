@@ -39,23 +39,21 @@ func NewReader(f SegmentReaderFactoryFunc) *Reader {
 	return sr
 }
 
-// AddSegment will add a Segment to the index, and instantly becomes available for reading.
-// Segments should only be added once fully durable and available to read.
-func (r *Reader) AddSegment(record SegmentRecord) {
+// UpdateSegments will obtain a write lock over segment indexes, and perform all the modifications at once.
+// This allows you to atomically drop and add segment files for use cases like compaction.
+//
+// Drop runs before add.
+func (r *Reader) UpdateSegments(add []SegmentRecord, drop []SegmentRecord) {
 	r.indexMu.Lock()
 	defer r.indexMu.Unlock()
-	// todo add to segment tree
-	// todo add to block range tree
-	panic("todo")
-}
-
-func (r *Reader) DropSegment(segmentID string) {
-	r.indexMu.Lock()
-	defer r.indexMu.Unlock()
+	// todo handle deletes first
 	// todo lookup in segment tree
 	// todo drop from segment tree
 	// todo drop from block range tree
-	panic("todo")
+
+	// todo handle adds
+	// todo add to segment tree
+	// todo add to block range tree
 }
 
 func (r *Reader) GetRow(key []byte) ([]byte, error) {
