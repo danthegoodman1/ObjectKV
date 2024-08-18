@@ -7,19 +7,10 @@ import (
 	"fmt"
 	"github.com/bits-and-blooms/bloom"
 	"github.com/cespare/xxhash/v2"
-	"github.com/danthegoodman1/objectkv/syncx"
 	"github.com/google/btree"
 	"github.com/klauspost/compress/zstd"
 	"io"
 )
-
-var (
-	backgroundCacheLockMap *syncx.Map[string, bool]
-)
-
-func init() {
-	backgroundCacheLockMap = syncx.NewMapPtr[string, bool]()
-}
 
 type (
 	SegmentReader struct {
