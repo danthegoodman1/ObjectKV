@@ -20,9 +20,6 @@ type (
 
 		reader    io.ReadSeeker
 		fileBytes int
-
-		// options
-		options SegmentReaderOptions
 	}
 
 	SegmentMetadata struct {
@@ -47,9 +44,8 @@ var (
 	UnboundEnd = []byte{0xff}
 )
 
-func NewSegmentReader(reader io.ReadSeeker, fileBytes int, opts SegmentReaderOptions) SegmentReader {
+func NewSegmentReader(reader io.ReadSeeker, fileBytes int) SegmentReader {
 	sr := SegmentReader{
-		options:   opts,
 		reader:    reader,
 		fileBytes: fileBytes,
 	}

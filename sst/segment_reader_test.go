@@ -37,7 +37,7 @@ func TestReadUncompressed(t *testing.T) {
 	// t.Log("metadata byte hex", hex.EncodeToString(metadataBytes))
 
 	// Read the bytes
-	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength), DefaultSegmentReaderOptions())
+	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength))
 	metadata, err := r.BytesToMetadata(metadataBytes)
 	if err != nil {
 		t.Fatal(err)
@@ -279,7 +279,7 @@ func TestReadSingleRecordUncompressed(t *testing.T) {
 	t.Logf("Got %d metadata bytes", len(metadataBytes))
 
 	// Read the bytes
-	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength), DefaultSegmentReaderOptions())
+	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength))
 	metadata, err := r.BytesToMetadata(metadataBytes)
 	if err != nil {
 		t.Fatal(err)
@@ -461,7 +461,7 @@ func TestReadCompressionZSTD(t *testing.T) {
 	// t.Log("metadata byte hex", hex.EncodeToString(metadataBytes))
 
 	// Read the bytes
-	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength), DefaultSegmentReaderOptions())
+	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength))
 	metadata, err := r.BytesToMetadata(metadataBytes)
 	if err != nil {
 		t.Fatal(err)

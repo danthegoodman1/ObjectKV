@@ -36,7 +36,7 @@ func TestRowIter(t *testing.T) {
 	t.Logf("Got %d metadata bytes", len(metadataBytes))
 
 	// Read the bytes
-	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength), DefaultSegmentReaderOptions())
+	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength))
 	iter, err := r.RowIter()
 	if err != nil {
 		t.Fatal(err)
