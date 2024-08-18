@@ -65,13 +65,16 @@ func (sr *SnapshotReader) GetRow(key []byte) ([]byte, error) {
 	// todo see sst.SegmentReader.GetRow impl
 	// todo figure out relevant blocks
 	// todo if no metadata, fetch on-demand
-	// todo check blocks in order of (asc level, desc ID)
+	// todo check blocks in order of segment (asc level, desc ID)
 	panic("todo")
 }
 
-func (sr *SnapshotReader) GetRange(start []byte, end []byte, direction int) ([]sst.KVPair, error) {
+func (sr *SnapshotReader) GetRange(start []byte, end []byte, limit, direction int) ([]sst.KVPair, error) {
 	// todo see sst.SegmentReader.GetRange impl
 	// todo if no metadata, fetch on-demand
+	// todo get row iters for all potential blocks
+	// todo iterate on rows from segments in order of (asc level, desc ID),
+	//  interleaving and skipping already read values, keeping track of deletes
 	panic("todo")
 }
 
