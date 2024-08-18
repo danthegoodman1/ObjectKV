@@ -73,6 +73,7 @@ func (sr *SnapshotReader) GetRange(start []byte, end []byte, limit, direction in
 	// todo see sst.SegmentReader.GetRange impl
 	// todo if no metadata, fetch on-demand
 	// todo get row iters for all potential blocks
+	// todo likely just a convenience wrapper around row iterator?
 	// todo iterate on rows from segments in order of (asc level, desc ID),
 	//  interleaving and skipping already read values, keeping track of deletes
 	panic("todo")
