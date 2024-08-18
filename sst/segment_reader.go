@@ -339,12 +339,22 @@ func (s *SegmentReader) ReadBlockWithStat(stat BlockStat) ([]KVPair, error) {
 
 var ErrNoRows = errors.New("no rows found")
 
-// todo delete this method - this should be higher level
+// GetRow will check whether a row exists within the segment, fetching the metadata as needed
 func (s *SegmentReader) GetRow(key []byte) (KVPair, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
 		if err != nil {
 			return KVPair{}, fmt.Errorf("error in FetchAndLoadMetadata: %w", err)
+		}
+	}
+
+	// first test the bloom filter if we have it
+	if s.metadata.BloomFilter != nil {
+		maybeExists, err := s.probeBloomFilter(key)
+		if err != nil {
+			return KVPair{}, fmt.Errorf("error probing bloom filter: %w", err)
+		} else if !maybeExists {
+			return KVPair{}, fmt.Errorf("did not find row in bloom filter: %w", ErrNoRows)
 		}
 	}
 

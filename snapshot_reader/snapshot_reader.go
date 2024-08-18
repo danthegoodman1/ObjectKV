@@ -41,9 +41,6 @@ func NewReader(f SegmentReaderFactoryFunc) *Reader {
 
 // AddSegment will add a Segment to the index, and instantly becomes available for reading.
 // Segments should only be added once fully durable and available to read.
-//
-// To reduce memory usage, you can opt to use a nil value for the sst.Metadata.BlockIndex,
-// and Reader will fetch metadata on-demand and use for data block-level filtering.
 func (r *Reader) AddSegment(record SegmentRecord) {
 	r.indexMu.Lock()
 	defer r.indexMu.Unlock()
@@ -64,14 +61,12 @@ func (r *Reader) DropSegment(segmentID string) {
 func (r *Reader) GetRow(key []byte) ([]byte, error) {
 	// todo see sst.SegmentReader.GetRow impl
 	// todo figure out relevant blocks
-	// todo if no metadata, fetch on-demand
 	// todo check blocks in order of segment (asc level, desc ID)
 	panic("todo")
 }
 
 func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst.KVPair, error) {
 	// todo see sst.SegmentReader.GetRange impl
-	// todo if no metadata, fetch on-demand
 	// todo get row iters for all potential blocks
 	// todo likely just a convenience wrapper around row iterator?
 	// todo iterate on rows from segments in order of (asc level, desc ID),
@@ -79,7 +74,8 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 	panic("todo")
 }
 
-func (r *Reader) RowIter(start []byte, direction int) *Iter {
+func (r *Reader) RowIter(start []byte, end []byte, direction int) *Iter {
+	// todo figure out blocks needed to read from snapshot
 	return &Iter{
 		reader: r,
 	}

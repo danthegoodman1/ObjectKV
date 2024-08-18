@@ -4,7 +4,9 @@ import "github.com/danthegoodman1/objectkv/sst"
 
 type (
 	Iter struct {
-		reader *Reader
+		reader        *Reader
+		direction     int
+		blockSnapshot []SegmentRecord
 	}
 )
 
@@ -19,5 +21,6 @@ func (i *Iter) Peek() (sst.KVPair, error) {
 }
 
 func (i *Iter) prepareSegmentIters() error {
+	// todo get an iter for possible blocks
 	panic("todo")
 }
