@@ -1,13 +1,21 @@
 package snapshot_reader
 
-// NextPossibleKey returns the next possible key asc (0) or desc (1)
+// NextPossibleKey returns the next possible key forward (asc) or backward (desc) of the current key.
+// Accounts for the max length of a possible key
+// If an invalid direction is provided then this function is a no-op
 func NextPossibleKey(key []byte, direction int) []byte {
 	nextKey := make([]byte, 512)
 	copy(nextKey[:], key)
-	if direction == DirectionForward {
-		nextKey[511] = nextKey[511] << 1
-	} else if direction == DirectionForward {
-		nextKey[511] = nextKey[511] >> 1
+	for i := 511; i >= 0; i-- {
+		// find the next possible value and incr/decr it
+		if nextKey[i] == 0 && direction == DirectionForward {
+			nextKey[i]++
+			break
+		}
+		if nextKey[i] > 0 && direction == DirectionReverse {
+			nextKey[i]--
+			break
+		}
 	}
 	// Otherwise we do nothing since we don't know the direction
 	return nextKey
