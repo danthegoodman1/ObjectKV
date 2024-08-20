@@ -20,7 +20,9 @@ type (
 )
 
 const (
+	// DirectionForward (ascending)
 	DirectionForward = iota
+	// DirectionReverse (descending)
 	DirectionReverse
 )
 
