@@ -141,9 +141,16 @@ func (r *Reader) getPossibleSegmentsForKey(key []byte) []SegmentRecord {
 func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst.KVPair, error) {
 	// todo see sst.SegmentReader.GetRange impl
 	// todo get row iters for all potential blocks
-	// todo likely just a convenience wrapper around row iterator?
+	// rows := make([]sst.KVPair, limit)
+	// addedRows := 0
 	// todo iterate on rows from segments in order of (asc level, desc ID),
-	//  interleaving and skipping already read values, keeping track of deletes
+	//  Get the first value (consider direction) for each iterator (cursor)
+	//  take the most significant value across cursors,
+	//  if competing by key take from the most significant segment
+	//  if L0 has a tombstone, roll forward all iters with that same key (if exists, they should be at top)
+	//  (anything that has that key next) and don't count that
+	//  roll forward (.Next()) all matching cursors with the most significant key
+	//  once we hit limit return the rows (they will be in order)
 	panic("todo")
 }
 
