@@ -2,8 +2,11 @@ package snapshot_reader
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"github.com/danthegoodman1/objectkv/sst"
 	"github.com/google/btree"
+	"sort"
 	"sync"
 )
 
@@ -62,10 +65,71 @@ func (r *Reader) UpdateSegments(add []SegmentRecord, drop []SegmentRecord) {
 //
 // Runs on a snapshot of segments when invoked, can run concurrently with segment updates.
 func (r *Reader) GetRow(key []byte) ([]byte, error) {
-	// todo see sst.SegmentReader.GetRow impl
-	// todo figure out relevant blocks
-	// todo check blocks in order of segment (asc level, desc ID)
-	panic("todo")
+	// figure out possible segments
+	possibleSegments := r.getPossibleSegmentsForKey(key)
+
+	// Sort them in desc ID order
+	sort.Slice(possibleSegments, func(i, j int) bool {
+		if possibleSegments[i].Level != possibleSegments[j].Level {
+			// ascending by level
+			return possibleSegments[i].Level < possibleSegments[j].Level
+		}
+		// descending by ID
+		return possibleSegments[i].ID > possibleSegments[j].ID
+	})
+
+	for _, segment := range possibleSegments {
+		// generate a reader for the segment
+		reader, err := r.readerFactory(segment)
+		if err != nil {
+			return nil, fmt.Errorf("error running reader factory for segment level=%d id=%d: %w", segment.Level, segment.ID, err)
+		}
+
+		// delegate the reader to the segment reader
+		row, err := reader.GetRow(key)
+		if errors.Is(err, sst.ErrNoRows) {
+			// not in this segment, go to the next
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("error in reader.GetRow: %w", err)
+		}
+
+		if bytes.Equal([]byte{}, row.Value) && segment.Level == 0 {
+			// this is a delete, row does not exist
+			return nil, sst.ErrNoRows
+			// NOTE should we panic if this is not level 0? that should never happen,
+			// but it's not detrimental, but it means we are not operating as we expect!
+		}
+
+		// otherwise we have a row
+		return row.Value, nil
+	}
+
+	// we never found anything
+	return nil, sst.ErrNoRows
+}
+
+// getPossibleSegmentsForKey will get all segments a key could live in
+func (r *Reader) getPossibleSegmentsForKey(key []byte) []SegmentRecord {
+	// NOTE maybe we can pre-create this to segment size
+	// to exchange higher mem for fewer allocations?
+	var possibleSegments []SegmentRecord
+	r.indexMu.RLock()
+	defer r.indexMu.Unlock()
+
+	// Descend from the key until we hit something too small
+	r.blockRangeTree.DescendLessOrEqual(SegmentRecord{
+		Metadata: sst.SegmentMetadata{FirstKey: key},
+	}, func(item SegmentRecord) bool {
+		lessThan := bytes.Compare(key, item.Metadata.FirstKey) < 0
+		if !lessThan {
+			possibleSegments = append(possibleSegments, item)
+		}
+		return lessThan // key is less than first key
+	})
+
+	return possibleSegments
 }
 
 // GetRange will fetch a range of rows up to a limit, starting from some direction.

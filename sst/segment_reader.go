@@ -331,7 +331,9 @@ func (s *SegmentReader) ReadBlockWithStat(stat BlockStat) ([]KVPair, error) {
 
 var ErrNoRows = errors.New("no rows found")
 
-// GetRow will check whether a row exists within the segment, fetching the metadata as needed
+// GetRow will check whether a row exists within the segment, fetching the metadata as needed.
+//
+// If the row is not found, KVPair.Key will be []byte{}.
 func (s *SegmentReader) GetRow(key []byte) (KVPair, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
@@ -447,6 +449,10 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 var ErrUnexpectedBytesRead = errors.New("unexpected bytes read")
 
 func readBytes(reader io.Reader, bytes int) ([]byte, error) {
+	if bytes == 0 {
+		// nothing to read
+		return nil, nil
+	}
 	buf := make([]byte, bytes)
 	n, err := reader.Read(buf)
 	if err != nil {
