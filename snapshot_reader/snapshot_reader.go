@@ -23,10 +23,8 @@ type (
 )
 
 const (
-	// DirectionForward (ascending)
-	DirectionForward = iota
-	// DirectionReverse (descending)
-	DirectionReverse
+	DirectionAscending = iota
+	DirectionDescending
 )
 
 func NewReader(f SegmentReaderFactoryFunc) *Reader {
@@ -132,15 +130,63 @@ func (r *Reader) getPossibleSegmentsForKey(key []byte) []SegmentRecord {
 	return possibleSegments
 }
 
+// getPossibleSegmentsForRange returns all possible segments a range of keys could live in
+func (r *Reader) getPossibleSegmentsForRange(start, end []byte) []SegmentRecord {
+	// NOTE maybe we can pre-create this to segment size
+	// to exchange higher mem for fewer allocations?
+	var possibleSegments []SegmentRecord
+	r.indexMu.RLock()
+	defer r.indexMu.Unlock()
+
+	// Descend from the key until we hit something too small
+	r.blockRangeTree.DescendLessOrEqual(SegmentRecord{
+		Metadata: sst.SegmentMetadata{FirstKey: end},
+	}, func(item SegmentRecord) bool {
+		lessThan := bytes.Compare(start, item.Metadata.FirstKey) < 0
+		if !lessThan {
+			possibleSegments = append(possibleSegments, item)
+		}
+		return lessThan // key is less than start key
+	})
+
+	return possibleSegments
+}
+
+var ErrInvalidRange = errors.New("invalid range")
+
 // GetRange will fetch a range of rows up to a limit, starting from some direction.
 // Internally it uses RowIter, and is a convenience wrapper around it.
+//
+// `end` must be greater than `start`
 //
 // Runs on a snapshot of segments when invoked, can run concurrently with segment updates.
 //
 // See sst.UnboundStart and sst.UnboundEnd helper vars
 func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst.KVPair, error) {
+	if bytes.Compare(start, end) >= 0 {
+		return nil, fmt.Errorf("%w: end must be strictly greater than start", ErrInvalidRange)
+	}
 	// todo see sst.SegmentReader.GetRange impl
-	// todo get row iters for all potential blocks
+	// get all potential blocks
+	possibleSegments := r.getPossibleSegmentsForRange(start, end)
+
+	// sort them based on level, then direction
+	sort.Slice(possibleSegments, func(i, j int) bool {
+		if possibleSegments[i].Level != possibleSegments[j].Level {
+			// ascending by level
+			return possibleSegments[i].Level < possibleSegments[j].Level
+		}
+
+		if direction == DirectionAscending {
+			// ascending by first key
+			return bytes.Compare(possibleSegments[i].Metadata.FirstKey, possibleSegments[j].Metadata.FirstKey) < 0
+		}
+		// otherwise descending by last key
+		return bytes.Compare(possibleSegments[i].Metadata.LastKey, possibleSegments[j].Metadata.LastKey) > 0
+	})
+
+	// todo get row iters for all possible segments
+
 	// rows := make([]sst.KVPair, limit)
 	// addedRows := 0
 	// todo iterate on rows from segments in order of (asc level, desc ID),

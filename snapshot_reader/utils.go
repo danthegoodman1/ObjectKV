@@ -8,11 +8,11 @@ func NextPossibleKey(key []byte, direction int) []byte {
 	copy(nextKey[:], key)
 	for i := 511; i >= 0; i-- {
 		// find the next possible value and incr/decr it
-		if nextKey[i] == 0 && direction == DirectionForward {
+		if nextKey[i] == 0 && direction == DirectionAscending {
 			nextKey[i]++
 			break
 		}
-		if nextKey[i] > 0 && direction == DirectionReverse {
+		if nextKey[i] > 0 && direction == DirectionDescending {
 			nextKey[i]--
 			break
 		}
