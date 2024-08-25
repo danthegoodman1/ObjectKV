@@ -189,7 +189,7 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 
 	// rows := make([]sst.KVPair, limit)
 	// addedRows := 0
-	// todo iterate on rows from segments in order of (asc level, desc ID),
+	// todo iterate on rows from segments in order of (asc level, desc ID)
 	//  Get the first value (consider direction) for each iterator (cursor)
 	//  take the most significant value across cursors,
 	//  if competing by key take from the most significant segment
