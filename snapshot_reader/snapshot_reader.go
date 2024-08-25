@@ -46,17 +46,29 @@ func NewReader(f SegmentReaderFactoryFunc) *Reader {
 // This allows you to atomically drop and add segment files for use cases like compaction.
 //
 // Drop runs before add.
+//
+// The minimum information to have within a SegmentRecord is the ID and Metadata.FirstKey
 func (r *Reader) UpdateSegments(add []SegmentRecord, drop []SegmentRecord) {
 	r.indexMu.Lock()
 	defer r.indexMu.Unlock()
-	// todo handle deletes first
-	// todo lookup in segment tree
-	// todo drop from segment tree
-	// todo drop from block range tree
 
-	// todo handle adds
-	// todo add to segment tree
-	// todo add to block range tree
+	// handle deletes first
+	for _, toDrop := range drop {
+		_, found := r.segmentIDTree.Delete(toDrop)
+		if !found {
+			continue
+		}
+		_, found = r.blockRangeTree.Delete(toDrop)
+		if !found {
+			// todo log warning or return error?
+		}
+	}
+
+	// handle adds
+	for _, toAdd := range add {
+		r.segmentIDTree.ReplaceOrInsert(toAdd)
+		r.blockRangeTree.ReplaceOrInsert(toAdd)
+	}
 }
 
 // GetRow will fetch a single row, returning sst.ErrNoRows if not found.
