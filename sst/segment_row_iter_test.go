@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestRowIter(t *testing.T) {
+func TestRowIterNext(t *testing.T) {
 	b := &bytes.Buffer{}
 	opts := DefaultSegmentWriterOptions()
 	opts.BloomFilter = nil
@@ -119,7 +119,7 @@ func TestRowIter(t *testing.T) {
 	}
 }
 
-func TestSeekRowIter(t *testing.T) {
+func TestRowIterSeek(t *testing.T) {
 	b := &bytes.Buffer{}
 	opts := DefaultSegmentWriterOptions()
 	opts.BloomFilter = nil
@@ -160,7 +160,7 @@ func TestSeekRowIter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = iter.Seek([]byte("key0010"))
+	err = iter.Seek([]byte("key010"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,11 +171,171 @@ func TestSeekRowIter(t *testing.T) {
 	}
 
 	if !bytes.Equal(row.Key, []byte("key010")) {
-		t.Fatal("second row key bytes not equal")
+		t.Fatal("first row key bytes not equal")
 	}
 	if !bytes.Equal(row.Value, []byte("value010")) {
+		t.Fatal("first row value bytes not equal")
+	}
+
+	row, err = iter.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(row.Key, []byte("key011")) {
+		t.Fatal("second row key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte("value011")) {
 		t.Fatal("second row value bytes not equal")
 	}
 
-	// todo check row iter descending
+	// seek to the beginning
+	err = iter.Seek(UnboundStart)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	row, err = iter.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(row.Key, []byte("key000")) {
+		t.Fatal("second row key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte("value000")) {
+		t.Fatal("second row value bytes not equal")
+	}
+
+	// seek out of range
+	err = iter.Seek([]byte("key200"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	row, err = iter.Next()
+	if !errors.Is(err, io.EOF) {
+		t.Fatal(err)
+	}
+
+	// Seek to unbound end
+	err = iter.Seek(UnboundEnd)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	row, err = iter.Next()
+	if !errors.Is(err, io.EOF) {
+		t.Fatal(err)
+	}
+
+	// check row iter descending
+	iter, err = r.RowIter(DirectionDescending)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = iter.Seek([]byte("key010"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	row, err = iter.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(row.Key, []byte("key010")) {
+		t.Fatal("first row key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte("value010")) {
+		t.Fatal("first row value bytes not equal")
+	}
+
+	row, err = iter.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(row.Key, []byte("key009")) {
+		t.Fatal("second row key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte("value009")) {
+		t.Fatal("second row value bytes not equal")
+	}
+
+	// seek to the beginning
+	err = iter.Seek(UnboundStart)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	row, err = iter.Next()
+	if !errors.Is(err, io.EOF) {
+		t.Fatal(err, string(row.Key), iter.blockRowIdx)
+	}
+
+	err = iter.Seek(UnboundEnd)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	row, err = iter.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(row.Key, []byte("key199")) {
+		t.Fatal("next row key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte("value199")) {
+		t.Fatal("next row value bytes not equal")
+	}
+
+	// seek out of range
+	err = iter.Seek([]byte("key200"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	row, err = iter.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(row.Key, []byte("key199")) {
+		t.Fatal("next row key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte("value199")) {
+		t.Fatal("next row value bytes not equal")
+	}
+
+	// seek out of range
+	err = iter.Seek([]byte("key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	row, err = iter.Next()
+	if !errors.Is(err, io.EOF) {
+		t.Fatal(err)
+	}
+
+	// Seek to unbound end
+	err = iter.Seek(UnboundEnd)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	row, err = iter.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(row.Key, []byte("key199")) {
+		t.Fatal("next row key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte("value199")) {
+		t.Fatal("next row value bytes not equal")
+	}
 }

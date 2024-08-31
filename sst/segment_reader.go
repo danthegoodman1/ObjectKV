@@ -397,6 +397,7 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 
 	// for the start of the range, we get any block below it
 	if isUnboundStart {
+		// could just get first...
 		s.metadata.BlockIndex.AscendLessThan(BlockStat{FirstKey: end}, func(item BlockStat) bool {
 			stats[string(item.FirstKey)] = item
 			return true
