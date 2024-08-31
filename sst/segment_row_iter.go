@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 )
 
 type (
@@ -29,7 +30,6 @@ var ErrClosed = errors.New("closed")
 // cached in the RowIter instance, so there is zero cost to blindly calling it (e.g. cursor logic in SnapshotReader).
 // Will return ErrClosed if the respective SegmentReader is closed.
 func (r *RowIter) Next() (KVPair, error) {
-	// todo consider direction
 	if r.noMore {
 		return KVPair{}, io.EOF
 	}
@@ -47,17 +47,37 @@ func (r *RowIter) Next() (KVPair, error) {
 
 	// otherwise we need to load the next block's rows
 	var stat *BlockStat
-	r.s.metadata.BlockIndex.AscendGreaterOrEqual(BlockStat{FirstKey: r.statLastKey}, func(item BlockStat) bool {
-		if bytes.Equal(r.statLastKey, item.FirstKey) {
-			// keep going, this is the same key
-			return true
+	if r.direction == DirectionDescending {
+		if r.statLastKey == nil {
+			// we grab the top key
+			r.statLastKey = r.s.metadata.LastKey
 		}
+		r.s.metadata.BlockIndex.DescendLessOrEqual(BlockStat{FirstKey: r.statLastKey}, func(item BlockStat) bool {
+			if bytes.Equal(r.statLastKey, item.FirstKey) {
+				// keep going, this is the same key
+				return true
+			}
 
-		// Otherwise we take it and exit (next stat)
-		r.statLastKey = item.FirstKey
-		stat = &item
-		return false
-	})
+			// Otherwise we take it and exit (next stat)
+			r.statLastKey = item.FirstKey
+			stat = &item
+			return false
+		})
+	} else {
+		// ascending by default
+		r.s.metadata.BlockIndex.AscendGreaterOrEqual(BlockStat{FirstKey: r.statLastKey}, func(item BlockStat) bool {
+			if bytes.Equal(r.statLastKey, item.FirstKey) {
+				// keep going, this is the same key
+				return true
+			}
+
+			// Otherwise we take it and exit (next stat)
+			r.statLastKey = item.FirstKey
+			stat = &item
+			return false
+		})
+
+	}
 
 	if stat == nil {
 		// there are no more blocks
@@ -71,12 +91,33 @@ func (r *RowIter) Next() (KVPair, error) {
 	}
 
 	r.blockRows = rows
+	// if descending, we need to reverse the block
+	if r.direction == DirectionDescending {
+		slices.Reverse(r.blockRows)
+	}
 
 	r.blockRowIdx = 1
 	return r.blockRows[0], nil
 }
 
+// Seek will seek to the given key, such that any subsequent Next
+// call will return that key or after (determined by direction)
 func (r *RowIter) Seek(key []byte) error {
-	// todo implement seek to key based on direction
-	panic("todo")
+	// find the last block first key before this
+	var stat *BlockStat
+	r.s.metadata.BlockIndex.DescendLessOrEqual(BlockStat{FirstKey: key}, func(item BlockStat) bool {
+		stat = &item
+		return false
+	})
+
+	if stat == nil {
+		// there are no more blocks
+		r.noMore = true
+		return io.EOF
+	}
+
+	// Load the block and read until that key or past it
+	// todo consider direction
+
+	return nil
 }

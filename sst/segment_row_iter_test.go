@@ -91,6 +91,32 @@ func TestRowIter(t *testing.T) {
 		t.Fatal("got unexpected error value", err)
 	}
 
+	// Descending iter
+	iter, err = r.RowIter(DirectionDescending)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	row, err = iter.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(row.Key, []byte("key199")) {
+		t.Fatal("first row key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte("value199")) {
+		t.Fatal("first row value bytes not equal")
+	}
+	row, err = iter.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(row.Key, []byte("key198")) {
+		t.Fatal("second row key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte("value198")) {
+		t.Fatal("second row value bytes not equal")
+	}
 }
 
 func TestSeekRowIter(t *testing.T) {
@@ -129,15 +155,27 @@ func TestSeekRowIter(t *testing.T) {
 		}, int(segmentLength))
 	defer r.Close()
 
-	// iter, err := r.RowIter(DirectionAscending)
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
+	iter, err := r.RowIter(DirectionAscending)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	// row, err := iter.Next()
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
+	err = iter.Seek([]byte("key0010"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	row, err := iter.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(row.Key, []byte("key010")) {
+		t.Fatal("second row key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte("value010")) {
+		t.Fatal("second row value bytes not equal")
+	}
 
 	// todo check row iter descending
 }
