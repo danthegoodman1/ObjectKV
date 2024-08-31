@@ -2,22 +2,42 @@ package sst
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 )
 
 type (
 	RowIter struct {
-		reader      io.ReadSeeker
 		statLastKey []byte
 		blockRows   []KVPair
 		blockRowIdx int
 		s           *SegmentReader
+		noMore      bool
+		direction   int
 	}
 )
 
-// Next returns io.EOF when there are no more rows.
+const (
+	DirectionAscending = iota
+	DirectionDescending
+)
+
+var ErrClosed = errors.New("closed")
+
+// Next returns io.EOF when there are no more rows. Can safely call Next after an io.EOF error, as that will be
+// cached in the RowIter instance, so there is zero cost to blindly calling it (e.g. cursor logic in SnapshotReader).
+// Will return ErrClosed if the respective SegmentReader is closed.
 func (r *RowIter) Next() (KVPair, error) {
+	// todo consider direction
+	if r.noMore {
+		return KVPair{}, io.EOF
+	}
+
+	if r.s.closed {
+		return KVPair{}, ErrClosed
+	}
+
 	if r.blockRows != nil && r.blockRowIdx < len(r.blockRows) {
 		// return the row if we have them, and have not reached the end
 		pair := r.blockRows[r.blockRowIdx]
@@ -41,6 +61,7 @@ func (r *RowIter) Next() (KVPair, error) {
 
 	if stat == nil {
 		// there are no more blocks
+		r.noMore = true
 		return KVPair{}, io.EOF
 	}
 
@@ -53,4 +74,9 @@ func (r *RowIter) Next() (KVPair, error) {
 
 	r.blockRowIdx = 1
 	return r.blockRows[0], nil
+}
+
+func (r *RowIter) Seek(key []byte) error {
+	// todo implement seek to key based on direction
+	panic("todo")
 }

@@ -8,11 +8,25 @@ import (
 	"time"
 )
 
+// bytesReadSeekCloser is a custom type that wraps a bytes.Reader and implements io.ReadSeekCloser
+type bytesReadSeekCloser struct {
+	*bytes.Reader
+}
+
+// Close is a no-op method to satisfy the io.Closer interface.
+func (b bytesReadSeekCloser) Close() error {
+	// Since there's nothing to close, simply return nil
+	return nil
+}
+
 func TestReadUncompressed(t *testing.T) {
 	b := &bytes.Buffer{}
 	opts := DefaultSegmentWriterOptions()
 	opts.BloomFilter = nil
-	w := NewSegmentWriter(b, opts)
+	w := NewSegmentWriter(
+		bytesWriteCloser{
+			b,
+		}, opts)
 
 	totalBytes := 0
 	s := time.Now()
@@ -37,7 +51,10 @@ func TestReadUncompressed(t *testing.T) {
 	// t.Log("metadata byte hex", hex.EncodeToString(metadataBytes))
 
 	// Read the bytes
-	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength))
+	r := NewSegmentReader(
+		bytesReadSeekCloser{
+			bytes.NewReader(b.Bytes()),
+		}, int(segmentLength))
 	metadata, err := r.BytesToMetadata(metadataBytes)
 	if err != nil {
 		t.Fatal(err)
@@ -250,13 +267,25 @@ func TestReadUncompressed(t *testing.T) {
 	if !bytes.Equal(rows[0].Value, []byte(lastValue)) {
 		t.Fatal("first row did not match last value")
 	}
+
+	err = r.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = r.Close()
+	if !errors.Is(err, ErrAlreadyClosed) {
+		t.Fatal(err)
+	}
 }
 
 func TestReadBlankRecordUncompressed(t *testing.T) {
 	b := &bytes.Buffer{}
 	opts := DefaultSegmentWriterOptions()
 	opts.BloomFilter = nil
-	w := NewSegmentWriter(b, opts)
+	w := NewSegmentWriter(
+		bytesWriteCloser{
+			b,
+		}, opts)
 
 	totalBytes := 0
 	s := time.Now()
@@ -285,7 +314,10 @@ func TestReadBlankRecordUncompressed(t *testing.T) {
 	t.Logf("Got %d metadata bytes", len(metadataBytes))
 
 	// Read the bytes
-	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength))
+	r := NewSegmentReader(
+		bytesReadSeekCloser{
+			bytes.NewReader(b.Bytes()),
+		}, int(segmentLength))
 	_, err = r.BytesToMetadata(metadataBytes)
 	if err != nil {
 		t.Fatal(err)
@@ -307,7 +339,10 @@ func TestReadSingleRecordUncompressed(t *testing.T) {
 	b := &bytes.Buffer{}
 	opts := DefaultSegmentWriterOptions()
 	opts.BloomFilter = nil
-	w := NewSegmentWriter(b, opts)
+	w := NewSegmentWriter(
+		bytesWriteCloser{
+			b,
+		}, opts)
 
 	totalBytes := 0
 	s := time.Now()
@@ -330,7 +365,10 @@ func TestReadSingleRecordUncompressed(t *testing.T) {
 	t.Logf("Got %d metadata bytes", len(metadataBytes))
 
 	// Read the bytes
-	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength))
+	r := NewSegmentReader(
+		bytesReadSeekCloser{
+			bytes.NewReader(b.Bytes()),
+		}, int(segmentLength))
 	metadata, err := r.BytesToMetadata(metadataBytes)
 	if err != nil {
 		t.Fatal(err)
@@ -487,7 +525,10 @@ func TestReadCompressionZSTD(t *testing.T) {
 	opts := DefaultSegmentWriterOptions()
 	opts.BloomFilter = nil
 	opts.ZSTDCompressionLevel = 1
-	w := NewSegmentWriter(b, opts)
+	w := NewSegmentWriter(
+		bytesWriteCloser{
+			b,
+		}, opts)
 
 	totalBytes := 0
 	s := time.Now()
@@ -512,7 +553,10 @@ func TestReadCompressionZSTD(t *testing.T) {
 	// t.Log("metadata byte hex", hex.EncodeToString(metadataBytes))
 
 	// Read the bytes
-	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength))
+	r := NewSegmentReader(
+		bytesReadSeekCloser{
+			bytes.NewReader(b.Bytes()),
+		}, int(segmentLength))
 	metadata, err := r.BytesToMetadata(metadataBytes)
 	if err != nil {
 		t.Fatal(err)
@@ -676,6 +720,15 @@ func TestReadCompressionZSTD(t *testing.T) {
 	}
 	if !bytes.Equal(rows[0].Value, []byte(lastValue)) {
 		t.Fatal("first row did not match last value")
+	}
+
+	err = r.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = r.Close()
+	if !errors.Is(err, ErrAlreadyClosed) {
+		t.Fatal(err)
 	}
 }
 

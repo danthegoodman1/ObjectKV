@@ -18,8 +18,9 @@ type (
 
 		metadata *SegmentMetadata
 
-		reader    io.ReadSeeker
+		reader    io.ReadSeekCloser
 		fileBytes int
+		closed    bool
 	}
 
 	SegmentMetadata struct {
@@ -44,7 +45,7 @@ var (
 	UnboundEnd = []byte{0xff}
 )
 
-func NewSegmentReader(reader io.ReadSeeker, fileBytes int) SegmentReader {
+func NewSegmentReader(reader io.ReadSeekCloser, fileBytes int) SegmentReader {
 	sr := SegmentReader{
 		reader:    reader,
 		fileBytes: fileBytes,
@@ -236,7 +237,7 @@ func (s *SegmentReader) probeBloomFilter(key []byte) (bool, error) {
 // as this just starts loading blocks and returning rows.
 //
 // Fetches the metadata if not already loaded.
-func (s *SegmentReader) RowIter() (*RowIter, error) {
+func (s *SegmentReader) RowIter(direction int) (*RowIter, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
 		if err != nil {
@@ -252,8 +253,8 @@ func (s *SegmentReader) RowIter() (*RowIter, error) {
 	})
 
 	return &RowIter{
-		reader: s.reader,
-		s:      s,
+		s:         s,
+		direction: direction,
 	}, nil
 }
 
@@ -447,6 +448,16 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 }
 
 var ErrUnexpectedBytesRead = errors.New("unexpected bytes read")
+var ErrAlreadyClosed = errors.New("already closed")
+
+// Close closes the reader. If already closed, will return ErrAlreadyClosed
+func (s *SegmentReader) Close() error {
+	if s.closed {
+		return ErrAlreadyClosed
+	}
+	s.closed = true
+	return s.reader.Close()
+}
 
 func readBytes(reader io.Reader, bytes int) ([]byte, error) {
 	if bytes == 0 {

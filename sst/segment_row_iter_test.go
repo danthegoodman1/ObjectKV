@@ -13,7 +13,10 @@ func TestRowIter(t *testing.T) {
 	b := &bytes.Buffer{}
 	opts := DefaultSegmentWriterOptions()
 	opts.BloomFilter = nil
-	w := NewSegmentWriter(b, opts)
+	w := NewSegmentWriter(
+		bytesWriteCloser{
+			b,
+		}, opts)
 
 	totalBytes := 0
 	s := time.Now()
@@ -36,11 +39,16 @@ func TestRowIter(t *testing.T) {
 	t.Logf("Got %d metadata bytes", len(metadataBytes))
 
 	// Read the bytes
-	r := NewSegmentReader(bytes.NewReader(b.Bytes()), int(segmentLength))
-	iter, err := r.RowIter()
+	r := NewSegmentReader(
+		bytesReadSeekCloser{
+			bytes.NewReader(b.Bytes()),
+		}, int(segmentLength))
+	iter, err := r.RowIter(DirectionAscending)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	defer r.Close()
 
 	row, err := iter.Next()
 	if err != nil {
@@ -82,4 +90,54 @@ func TestRowIter(t *testing.T) {
 	if !errors.Is(err, io.EOF) {
 		t.Fatal("got unexpected error value", err)
 	}
+
+}
+
+func TestSeekRowIter(t *testing.T) {
+	b := &bytes.Buffer{}
+	opts := DefaultSegmentWriterOptions()
+	opts.BloomFilter = nil
+	w := NewSegmentWriter(
+		bytesWriteCloser{
+			b,
+		}, opts)
+
+	totalBytes := 0
+	s := time.Now()
+	for i := 0; i < 200; i++ {
+		key := []byte(fmt.Sprintf("key%03d", i))
+		val := []byte(fmt.Sprintf("value%03d", i))
+		err := w.WriteRow(key, val)
+		if err != nil {
+			t.Fatal(err)
+		}
+		totalBytes += len(key) + len(val)
+	}
+	segmentLength, metadataBytes, err := w.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta := time.Since(s)
+	t.Log("Wrote", totalBytes, "in", delta, fmt.Sprintf("%.2fMB/s", float64(totalBytes)/1_000_000/delta.Seconds())) // 22MB/s
+
+	t.Logf("Got %d metadata bytes", len(metadataBytes))
+
+	// Read the bytes
+	r := NewSegmentReader(
+		bytesReadSeekCloser{
+			bytes.NewReader(b.Bytes()),
+		}, int(segmentLength))
+	defer r.Close()
+
+	// iter, err := r.RowIter(DirectionAscending)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	// row, err := iter.Next()
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	// todo check row iter descending
 }

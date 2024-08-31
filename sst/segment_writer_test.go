@@ -2,6 +2,7 @@ package sst
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -12,7 +13,10 @@ func TestSegmentWriterNoCompression(t *testing.T) {
 	b := &bytes.Buffer{}
 	opts := DefaultSegmentWriterOptions()
 	opts.BloomFilter = nil
-	w := NewSegmentWriter(b, opts)
+	w := NewSegmentWriter(
+		bytesWriteCloser{
+			b,
+		}, opts)
 
 	totalBytes := 0
 	s := time.Now()
@@ -40,7 +44,10 @@ func TestSegmentWriterZSTD(t *testing.T) {
 	opts := DefaultSegmentWriterOptions()
 	opts.BloomFilter = nil
 	opts.ZSTDCompressionLevel = 1
-	w := NewSegmentWriter(b, opts)
+	w := NewSegmentWriter(
+		bytesWriteCloser{
+			b,
+		}, opts)
 
 	totalBytes := 0
 	s := time.Now()
@@ -67,7 +74,10 @@ func TestSegmentWriterLargerThanBlock(t *testing.T) {
 	b := &bytes.Buffer{}
 	opts := DefaultSegmentWriterOptions()
 	opts.BloomFilter = nil
-	w := NewSegmentWriter(b, opts)
+	w := NewSegmentWriter(
+		bytesWriteCloser{
+			b,
+		}, opts)
 
 	totalBytes := 0
 
@@ -99,4 +109,19 @@ func TestSegmentWriterLargerThanBlock(t *testing.T) {
 	t.Log("Wrote", totalBytes, "in", delta, fmt.Sprintf("%.2fMB/s", float64(totalBytes)/1_000_000/delta.Seconds())) // 22MB/s
 	// t.Log(hex.EncodeToString(b.Bytes()))
 	t.Log("Got segment length", segmentLen)
+}
+
+func TestEmptyKey(t *testing.T) {
+	b := &bytes.Buffer{}
+	opts := DefaultSegmentWriterOptions()
+	opts.BloomFilter = nil
+	opts.ZSTDCompressionLevel = 1
+	w := NewSegmentWriter(
+		bytesWriteCloser{
+			b,
+		}, opts)
+	err := w.WriteRow([]byte{}, []byte{})
+	if !errors.Is(err, ErrInvalidKey) {
+		t.Fatal("did not get invalid key error, got:", err)
+	}
 }
