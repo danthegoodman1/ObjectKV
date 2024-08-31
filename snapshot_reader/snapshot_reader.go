@@ -182,6 +182,11 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 	// get all potential blocks
 	possibleSegments := r.getPossibleSegmentsForRange(start, end)
 
+	if len(possibleSegments) == 0 {
+		// exit early
+		return nil, nil
+	}
+
 	// sort them based on level, then direction
 	sort.Slice(possibleSegments, func(i, j int) bool {
 		if possibleSegments[i].Level != possibleSegments[j].Level {
@@ -197,7 +202,21 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 		return bytes.Compare(possibleSegments[i].Metadata.LastKey, possibleSegments[j].Metadata.LastKey) > 0
 	})
 
-	// todo get row iters for all possible segments
+	// get row iters for all possible segments
+	segmentIters := make([]sst.RowIter, len(possibleSegments))
+	for i, segment := range possibleSegments {
+		reader, err := r.readerFactory(segment)
+		if err != nil {
+			return nil, fmt.Errorf("error in r.readerFactor for segment %s: %w", segment.ID, err)
+		}
+
+		iter, err := reader.RowIter()
+		if err != nil {
+			return nil, fmt.Errorf("error in reader.RowIter for segment %s: %w", segment.ID, err)
+		}
+
+		segmentIters[i] = *iter
+	}
 
 	// rows := make([]sst.KVPair, limit)
 	// addedRows := 0
