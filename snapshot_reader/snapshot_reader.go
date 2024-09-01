@@ -210,26 +210,33 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 	segmentIters := make([]sst.RowIter, len(possibleSegments))
 	cursors := make([]sst.KVPair, len(possibleSegments)) // a buffer for the next key
 	for i, segment := range possibleSegments {
-		// todo add concurrency to this
-		reader, err := r.readerFactory(segment)
-		if err != nil {
-			return nil, fmt.Errorf("error in r.readerFactor for segment %s: %w", segment.ID, err)
-		}
+		g := errgroup.Group{}
+		g.Go(func() error {
+			reader, err := r.readerFactory(segment)
+			if err != nil {
+				return fmt.Errorf("error in r.readerFactor for segment %s: %w", segment.ID, err)
+			}
 
-		// Close all the readers at the end
-		defer reader.Close()
+			// Close all the readers at the end
+			defer reader.Close()
 
-		iter, err := reader.RowIter(direction)
-		if err != nil {
-			return nil, fmt.Errorf("error in reader.RowIter for segment %s: %w", segment.ID, err)
-		}
+			iter, err := reader.RowIter(direction)
+			if err != nil {
+				return fmt.Errorf("error in reader.RowIter for segment %s: %w", segment.ID, err)
+			}
 
-		segmentIters[i] = *iter
-		pair, err := segmentIters[i].Next()
+			segmentIters[i] = *iter
+			pair, err := segmentIters[i].Next()
+			if err != nil {
+				return fmt.Errorf("error in sst.RowIter.Next() for segment %s: %w", segment.ID, err)
+			}
+			cursors[i] = pair
+			return nil
+		})
+		err := g.Wait()
 		if err != nil {
-			return nil, fmt.Errorf("error in sst.RowIter.Next() for segment %s: %w", segment.ID, err)
+			return nil, fmt.Errorf("error setting up segment iterators: %w", err)
 		}
-		cursors[i] = pair
 	}
 
 	rows := make([]sst.KVPair, limit)
