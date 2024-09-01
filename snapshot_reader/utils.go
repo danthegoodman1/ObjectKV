@@ -1,5 +1,7 @@
 package snapshot_reader
 
+import "github.com/danthegoodman1/objectkv/sst"
+
 // NextPossibleKey returns the next possible key forward (asc) or backward (desc) of the current key.
 // Accounts for the max length of a possible key
 // If an invalid direction is provided then this function is a no-op
@@ -8,11 +10,11 @@ func NextPossibleKey(key []byte, direction int) []byte {
 	copy(nextKey[:], key)
 	for i := 511; i >= 0; i-- {
 		// find the next possible value and incr/decr it
-		if nextKey[i] == 0 && direction == DirectionForward {
+		if nextKey[i] == 0 && direction == sst.DirectionAscending {
 			nextKey[i]++
 			break
 		}
-		if nextKey[i] > 0 && direction == DirectionReverse {
+		if nextKey[i] > 0 && direction == sst.DirectionDescending {
 			nextKey[i]--
 			break
 		}

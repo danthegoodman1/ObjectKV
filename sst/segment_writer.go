@@ -11,12 +11,22 @@ import (
 	"math"
 )
 
+type bytesWriteCloser struct {
+	*bytes.Buffer
+}
+
+// Close is a no-op method to satisfy the io.Closer interface.
+func (wc bytesWriteCloser) Close() error {
+	// Since there's nothing to close, simply return nil
+	return nil
+}
+
 type (
 	SegmentWriter struct {
 		currentRawBlockSize  uint64
 		currentBlockStartKey []byte
-		blockBuffer          *bytes.Buffer // the buffer for the (un)compressed block
-		blockWriter          io.Writer     // write to the blockBuffer with optional compression
+		blockBuffer          *bytesWriteCloser // the buffer for the (un)compressed block
+		blockWriter          io.WriteCloser    // write to the blockBuffer with optional compression
 
 		// writes to actual destination (S3 &/ file)
 		externalWriter io.Writer
@@ -34,7 +44,7 @@ type (
 // NewSegmentWriter creates a new segment writer and opens the file(s) for writing.
 //
 // A segment writer can never be reused, and is not thread safe.
-func NewSegmentWriter(writer io.Writer, opts SegmentWriterOptions) SegmentWriter {
+func NewSegmentWriter(writer io.WriteCloser, opts SegmentWriterOptions) SegmentWriter {
 	sw := SegmentWriter{
 		options:        opts,
 		externalWriter: writer,
@@ -50,6 +60,7 @@ var (
 	ErrKeyTooLarge            = errors.New("key too large, must be <= max uint16 bytes")
 	ErrValueTooLarge          = errors.New("value too large, must be <= max uin32 bytes")
 	ErrNoRowsWritten          = errors.New("no rows were written, can't have an empty segment file")
+	ErrInvalidKey             = errors.New("invalid key")
 )
 
 // WriteRow writes a given row to the segment. Cannot write after the writer is closed.
@@ -65,13 +76,18 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 	if s.closed {
 		return ErrWriterClosed
 	}
+	if bytes.Equal([]byte{}, key) {
+		return fmt.Errorf("key cannot be empty :%w", ErrInvalidKey)
+	}
 	useZSTD := s.options.ZSTDCompressionLevel > 0
 	useLZ4 := !useZSTD && s.options.LZ4Compression
 	if s.blockWriter == nil {
 		// Ensure we are at a base state
 		s.currentBlockStartKey = key
 		s.currentRawBlockSize = 0
-		s.blockBuffer = &bytes.Buffer{}
+		s.blockBuffer = &bytesWriteCloser{
+			&bytes.Buffer{},
+		}
 
 		// create the writer if it doesn't exist, using the correct writer based on compression
 		// todo check lz4 compression
@@ -182,6 +198,7 @@ func (s *SegmentWriter) flushCurrentDataBlock() error {
 //
 // Returns the size of the file, the metadata bytes (useful for caching)
 func (s *SegmentWriter) Close() (uint64, []byte, error) {
+	defer s.blockWriter.Close()
 	// flush the current block if needed
 	if s.blockWriter != nil {
 		err := s.flushCurrentDataBlock()

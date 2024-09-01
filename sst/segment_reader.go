@@ -18,8 +18,9 @@ type (
 
 		metadata *SegmentMetadata
 
-		reader    io.ReadSeeker
+		reader    io.ReadSeekCloser
 		fileBytes int
+		closed    bool
 	}
 
 	SegmentMetadata struct {
@@ -44,7 +45,7 @@ var (
 	UnboundEnd = []byte{0xff}
 )
 
-func NewSegmentReader(reader io.ReadSeeker, fileBytes int) SegmentReader {
+func NewSegmentReader(reader io.ReadSeekCloser, fileBytes int) SegmentReader {
 	sr := SegmentReader{
 		reader:    reader,
 		fileBytes: fileBytes,
@@ -236,7 +237,7 @@ func (s *SegmentReader) probeBloomFilter(key []byte) (bool, error) {
 // as this just starts loading blocks and returning rows.
 //
 // Fetches the metadata if not already loaded.
-func (s *SegmentReader) RowIter() (*RowIter, error) {
+func (s *SegmentReader) RowIter(direction int) (*RowIter, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
 		if err != nil {
@@ -252,8 +253,8 @@ func (s *SegmentReader) RowIter() (*RowIter, error) {
 	})
 
 	return &RowIter{
-		reader: s.reader,
-		s:      s,
+		s:         s,
+		direction: direction,
 	}, nil
 }
 
@@ -331,7 +332,9 @@ func (s *SegmentReader) ReadBlockWithStat(stat BlockStat) ([]KVPair, error) {
 
 var ErrNoRows = errors.New("no rows found")
 
-// GetRow will check whether a row exists within the segment, fetching the metadata as needed
+// GetRow will check whether a row exists within the segment, fetching the metadata as needed.
+//
+// If the row is not found, KVPair.Key will be []byte{}.
 func (s *SegmentReader) GetRow(key []byte) (KVPair, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()
@@ -394,6 +397,7 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 
 	// for the start of the range, we get any block below it
 	if isUnboundStart {
+		// could just get first...
 		s.metadata.BlockIndex.AscendLessThan(BlockStat{FirstKey: end}, func(item BlockStat) bool {
 			stats[string(item.FirstKey)] = item
 			return true
@@ -445,8 +449,22 @@ func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 }
 
 var ErrUnexpectedBytesRead = errors.New("unexpected bytes read")
+var ErrAlreadyClosed = errors.New("already closed")
+
+// Close closes the reader. If already closed, will return ErrAlreadyClosed
+func (s *SegmentReader) Close() error {
+	if s.closed {
+		return ErrAlreadyClosed
+	}
+	s.closed = true
+	return s.reader.Close()
+}
 
 func readBytes(reader io.Reader, bytes int) ([]byte, error) {
+	if bytes == 0 {
+		// nothing to read
+		return nil, nil
+	}
 	buf := make([]byte, bytes)
 	n, err := reader.Read(buf)
 	if err != nil {
