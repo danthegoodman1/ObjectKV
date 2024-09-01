@@ -117,6 +117,20 @@ func TestRowIterNext(t *testing.T) {
 	if !bytes.Equal(row.Value, []byte("value198")) {
 		t.Fatal("second row value bytes not equal")
 	}
+
+	for range 197 {
+		row, err = iter.Next()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if !bytes.Equal(row.Key, []byte("key001")) {
+		t.Fatal("final row key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte("value001")) {
+		t.Fatal("final row value bytes not equal")
+	}
 }
 
 func TestRowIterSeek(t *testing.T) {
