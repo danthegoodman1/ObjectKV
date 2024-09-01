@@ -54,10 +54,7 @@ func (r *Reader) UpdateSegments(add []SegmentRecord, drop []SegmentRecord) {
 		if !found {
 			continue
 		}
-		_, found = r.blockRangeTree.Delete(toDrop)
-		if !found {
-			// todo log warning or return error?
-		}
+		r.blockRangeTree.Delete(toDrop)
 	}
 
 	// handle adds
