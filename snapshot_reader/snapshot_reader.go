@@ -2,6 +2,7 @@ package snapshot_reader
 
 import (
 	"bytes"
+	"container/list"
 	"errors"
 	"fmt"
 	"github.com/danthegoodman1/objectkv/sst"
@@ -163,7 +164,9 @@ var ErrInvalidRange = errors.New("invalid range")
 // GetRange will fetch a range of rows up to a limit, starting from some direction.
 // Internally it uses RowIter, and is a convenience wrapper around it.
 //
-// `end` must be greater than `start`
+// `end` must be greater than `start`, with the range [start, end): start inclusive, end exclusive.
+// This means that when paginating with sst.DirectionAscending, you will see the
+// `end` of the previous range as your first key in the subsequent page if it's used as the `start`
 //
 // Runs on a snapshot of segments when invoked, can run concurrently with segment updates.
 //
@@ -238,7 +241,7 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 
 	rows := make([]sst.KVPair, limit)
 	addedRowIndex := 0
-	var lastKey []byte // safe because key can never be empty
+	var lastKey []byte // sst.KVPair.Key can never be empty, so if this is empty we know we haven't set it yet
 	for {
 		// get the index of the cursors with the next value in the direction we want
 		nextIndexes := findMaxIndexes(cursors, func(a, b sst.KVPair) int {
@@ -360,12 +363,23 @@ func findMaxIndexes[T any](arr []T, compare compareFunc[T]) []int {
 	return indexes
 }
 
-// RowIter creates a new row iter for a given range.
+// RowIter creates a new row iter for a given range. Internally, it manages multiple
+// GetRange requests and buffers their response, so it's very much a convenience API
+// and provides no performance benefits.
 //
-// See sst.UnboundStart and sst.UnboundEnd helper vars
-func (r *Reader) RowIter(start []byte, end []byte, direction int) *Iter {
-	// todo figure out blocks needed to read from snapshot
-	return &Iter{
-		reader: r,
+// See sst.UnboundStart and sst.UnboundEnd helper vars.
+func (r *Reader) RowIter(start []byte, direction int, opts ...IterOption) *Iter {
+	iter := &Iter{
+		reader:    r,
+		lastKey:   start,
+		direction: direction,
+		options:   defaultIterOptions,
+		rowBuffer: list.New(), // give an initial list so it knows to fill
 	}
+
+	for _, opt := range opts {
+		opt(&iter.options)
+	}
+
+	return iter
 }
