@@ -14,7 +14,7 @@ func TestSegmentWriterNoCompression(t *testing.T) {
 	opts := DefaultSegmentWriterOptions()
 	opts.BloomFilter = nil
 	w := NewSegmentWriter(
-		bytesWriteCloser{
+		BytesWriteCloser{
 			b,
 		}, opts)
 
@@ -45,7 +45,7 @@ func TestSegmentWriterZSTD(t *testing.T) {
 	opts.BloomFilter = nil
 	opts.ZSTDCompressionLevel = 1
 	w := NewSegmentWriter(
-		bytesWriteCloser{
+		BytesWriteCloser{
 			b,
 		}, opts)
 
@@ -75,7 +75,7 @@ func TestSegmentWriterLargerThanBlock(t *testing.T) {
 	opts := DefaultSegmentWriterOptions()
 	opts.BloomFilter = nil
 	w := NewSegmentWriter(
-		bytesWriteCloser{
+		BytesWriteCloser{
 			b,
 		}, opts)
 
@@ -117,7 +117,7 @@ func TestEmptyKey(t *testing.T) {
 	opts.BloomFilter = nil
 	opts.ZSTDCompressionLevel = 1
 	w := NewSegmentWriter(
-		bytesWriteCloser{
+		BytesWriteCloser{
 			b,
 		}, opts)
 	err := w.WriteRow([]byte{}, []byte{})

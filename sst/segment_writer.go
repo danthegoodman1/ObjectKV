@@ -11,12 +11,13 @@ import (
 	"math"
 )
 
-type bytesWriteCloser struct {
+// BytesWriteCloser is a wrapper around bytes.Buffer that implements the io.WriteCloser interface
+type BytesWriteCloser struct {
 	*bytes.Buffer
 }
 
 // Close is a no-op method to satisfy the io.Closer interface.
-func (wc bytesWriteCloser) Close() error {
+func (wc BytesWriteCloser) Close() error {
 	// Since there's nothing to close, simply return nil
 	return nil
 }
@@ -25,7 +26,7 @@ type (
 	SegmentWriter struct {
 		currentRawBlockSize  uint64
 		currentBlockStartKey []byte
-		blockBuffer          *bytesWriteCloser // the buffer for the (un)compressed block
+		blockBuffer          *BytesWriteCloser // the buffer for the (un)compressed block
 		blockWriter          io.WriteCloser    // write to the blockBuffer with optional compression
 
 		// writes to actual destination (S3 &/ file)
@@ -85,7 +86,7 @@ func (s *SegmentWriter) WriteRow(key, val []byte) error {
 		// Ensure we are at a base state
 		s.currentBlockStartKey = key
 		s.currentRawBlockSize = 0
-		s.blockBuffer = &bytesWriteCloser{
+		s.blockBuffer = &BytesWriteCloser{
 			&bytes.Buffer{},
 		}
 
