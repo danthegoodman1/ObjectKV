@@ -15,7 +15,7 @@ func TestRowIterNext(t *testing.T) {
 	opts.BloomFilter = nil
 	w := NewSegmentWriter(
 		BytesWriteCloser{
-			b,
+			Buffer: b,
 		}, opts)
 
 	totalBytes := 0
@@ -41,7 +41,7 @@ func TestRowIterNext(t *testing.T) {
 	// Read the bytes
 	r := NewSegmentReader(
 		BytesReadSeekCloser{
-			bytes.NewReader(b.Bytes()),
+			Reader: bytes.NewReader(b.Bytes()),
 		}, int(segmentLength))
 	iter, err := r.RowIter(DirectionAscending)
 	if err != nil {
@@ -139,7 +139,7 @@ func TestRowIterSeek(t *testing.T) {
 	opts.BloomFilter = nil
 	w := NewSegmentWriter(
 		BytesWriteCloser{
-			b,
+			Buffer: b,
 		}, opts)
 
 	totalBytes := 0
@@ -165,7 +165,7 @@ func TestRowIterSeek(t *testing.T) {
 	// Read the bytes
 	r := NewSegmentReader(
 		BytesReadSeekCloser{
-			bytes.NewReader(b.Bytes()),
+			Reader: bytes.NewReader(b.Bytes()),
 		}, int(segmentLength))
 	defer r.Close()
 

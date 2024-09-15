@@ -12,6 +12,17 @@ import (
 	"io"
 )
 
+// BytesReadSeekCloser is a wrapper around bytes.Reader that implements io.ReadSeekCloser
+type BytesReadSeekCloser struct {
+	*bytes.Reader
+}
+
+// Close is a no-op method to satisfy the io.Closer interface.
+func (b BytesReadSeekCloser) Close() error {
+	// Since there's nothing to close, simply return nil
+	return nil
+}
+
 type (
 	SegmentReader struct {
 		rowIterBlockOffset int

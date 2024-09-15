@@ -8,24 +8,13 @@ import (
 	"time"
 )
 
-// BytesReadSeekCloser is a wrapper around bytes.Reader that implements io.ReadSeekCloser
-type BytesReadSeekCloser struct {
-	*bytes.Reader
-}
-
-// Close is a no-op method to satisfy the io.Closer interface.
-func (b BytesReadSeekCloser) Close() error {
-	// Since there's nothing to close, simply return nil
-	return nil
-}
-
 func TestReadUncompressed(t *testing.T) {
 	b := &bytes.Buffer{}
 	opts := DefaultSegmentWriterOptions()
 	opts.BloomFilter = nil
 	w := NewSegmentWriter(
 		BytesWriteCloser{
-			b,
+			Buffer: b,
 		}, opts)
 
 	totalBytes := 0
@@ -53,7 +42,7 @@ func TestReadUncompressed(t *testing.T) {
 	// Read the bytes
 	r := NewSegmentReader(
 		BytesReadSeekCloser{
-			bytes.NewReader(b.Bytes()),
+			Reader: bytes.NewReader(b.Bytes()),
 		}, int(segmentLength))
 	metadata, err := r.BytesToMetadata(metadataBytes)
 	if err != nil {
@@ -284,7 +273,7 @@ func TestReadBlankRecordUncompressed(t *testing.T) {
 	opts.BloomFilter = nil
 	w := NewSegmentWriter(
 		BytesWriteCloser{
-			b,
+			Buffer: b,
 		}, opts)
 
 	totalBytes := 0
@@ -316,7 +305,7 @@ func TestReadBlankRecordUncompressed(t *testing.T) {
 	// Read the bytes
 	r := NewSegmentReader(
 		BytesReadSeekCloser{
-			bytes.NewReader(b.Bytes()),
+			Reader: bytes.NewReader(b.Bytes()),
 		}, int(segmentLength))
 	_, err = r.BytesToMetadata(metadataBytes)
 	if err != nil {
@@ -341,7 +330,7 @@ func TestReadSingleRecordUncompressed(t *testing.T) {
 	opts.BloomFilter = nil
 	w := NewSegmentWriter(
 		BytesWriteCloser{
-			b,
+			Buffer: b,
 		}, opts)
 
 	totalBytes := 0
@@ -367,7 +356,7 @@ func TestReadSingleRecordUncompressed(t *testing.T) {
 	// Read the bytes
 	r := NewSegmentReader(
 		BytesReadSeekCloser{
-			bytes.NewReader(b.Bytes()),
+			Reader: bytes.NewReader(b.Bytes()),
 		}, int(segmentLength))
 	metadata, err := r.BytesToMetadata(metadataBytes)
 	if err != nil {
@@ -527,7 +516,7 @@ func TestReadCompressionZSTD(t *testing.T) {
 	opts.ZSTDCompressionLevel = 1
 	w := NewSegmentWriter(
 		BytesWriteCloser{
-			b,
+			Buffer: b,
 		}, opts)
 
 	totalBytes := 0
@@ -555,7 +544,7 @@ func TestReadCompressionZSTD(t *testing.T) {
 	// Read the bytes
 	r := NewSegmentReader(
 		BytesReadSeekCloser{
-			bytes.NewReader(b.Bytes()),
+			Reader: bytes.NewReader(b.Bytes()),
 		}, int(segmentLength))
 	metadata, err := r.BytesToMetadata(metadataBytes)
 	if err != nil {

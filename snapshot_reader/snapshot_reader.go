@@ -121,7 +121,7 @@ func (r *Reader) getPossibleSegmentsForKey(key []byte) []SegmentRecord {
 	// to exchange higher mem for fewer allocations?
 	var possibleSegments []SegmentRecord
 	r.indexMu.RLock()
-	defer r.indexMu.Unlock()
+	defer r.indexMu.RUnlock()
 
 	// Descend from the key until we hit something too small
 	r.blockRangeTree.DescendLessOrEqual(SegmentRecord{
@@ -143,7 +143,7 @@ func (r *Reader) getPossibleSegmentsForRange(start, end []byte) []SegmentRecord 
 	// to exchange higher mem for fewer allocations?
 	var possibleSegments []SegmentRecord
 	r.indexMu.RLock()
-	defer r.indexMu.Unlock()
+	defer r.indexMu.RUnlock()
 
 	// Descend from the key until we hit something too small
 	r.blockRangeTree.DescendLessOrEqual(SegmentRecord{

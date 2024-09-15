@@ -2,17 +2,141 @@ package snapshot_reader
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/danthegoodman1/objectkv/sst"
 	"testing"
 )
 
 func TestGetRow(t *testing.T) {
-	// todo write record
-	// todo create snapshot reader
+	// write records across segments
+	seg1 := &bytes.Buffer{}
+	opts := sst.DefaultSegmentWriterOptions()
+	opts.BloomFilter = nil
+	w := sst.NewSegmentWriter(
+		sst.BytesWriteCloser{
+			Buffer: seg1,
+		}, opts)
+
+	for i := 0; i < 200; i += 2 {
+		key := []byte(fmt.Sprintf("key%03d", i))
+		val := []byte(fmt.Sprintf("value%03d", i))
+		err := w.WriteRow(key, val)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	segmentLength1, seg1MetaBytes, err := w.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	seg2 := &bytes.Buffer{}
+	w = sst.NewSegmentWriter(
+		sst.BytesWriteCloser{
+			Buffer: seg2,
+		}, opts)
+
+	for i := 1; i < 200; i += 2 {
+		key := []byte(fmt.Sprintf("key%03d", i))
+		val := []byte(fmt.Sprintf("value%03d", i))
+		err := w.WriteRow(key, val)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	segmentLength2, seg2MetaBytes, err := w.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Seg3 will be L1 so it should be skipped (duplicate of Seg2)
+	seg3 := &bytes.Buffer{}
+	w = sst.NewSegmentWriter(
+		sst.BytesWriteCloser{
+			Buffer: seg3,
+		}, opts)
+
+	for i := 1; i < 200; i += 2 {
+		key := []byte(fmt.Sprintf("key%03d", i))
+		val := []byte(fmt.Sprintf("value%03d-I-SHOULD-NOT-SHOW", i))
+		err := w.WriteRow(key, val)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	segmentLength3, seg3MetaBytes, err := w.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// create snapshot reader
+	snapReader := NewReader(func(record SegmentRecord) (*sst.SegmentReader, error) {
+		var reader sst.SegmentReader
+		if record.ID == "1" {
+			reader = sst.NewSegmentReader(sst.BytesReadSeekCloser{
+				Reader: bytes.NewReader(seg1.Bytes()),
+			}, int(segmentLength1))
+			return &reader, nil
+		} else if record.ID == "2" {
+			reader = sst.NewSegmentReader(sst.BytesReadSeekCloser{
+				Reader: bytes.NewReader(seg2.Bytes()),
+			}, int(segmentLength2))
+			return &reader, nil
+		} else if record.ID == "3" {
+			reader = sst.NewSegmentReader(sst.BytesReadSeekCloser{
+				Reader: bytes.NewReader(seg3.Bytes()),
+			}, int(segmentLength3))
+			return &reader, nil
+		}
+		panic("unexpected record id: " + record.ID)
+	})
+
+	seg1Meta, err := (&sst.SegmentReader{}).BytesToMetadata(seg1MetaBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	seg2Meta, err := (&sst.SegmentReader{}).BytesToMetadata(seg2MetaBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	seg3Meta, err := (&sst.SegmentReader{}).BytesToMetadata(seg3MetaBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Add the segments
+	snapReader.UpdateSegments([]SegmentRecord{
+		{
+			ID:       "1",
+			Level:    0,
+			Metadata: *seg1Meta,
+		},
+		{
+			ID:       "2",
+			Level:    0,
+			Metadata: *seg2Meta,
+		},
+		{
+			ID:       "3",
+			Level:    1,
+			Metadata: *seg3Meta,
+		},
+	}, nil)
+
 	// todo read row that exists in first segment
+	val, err := snapReader.GetRow([]byte("key000"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("val:", string(val))
+
 	// todo read row that exists in another segment
 	// todo read row that doesn't exist outside the range of the segments
 	// todo read row that could exist between items but doesn't
+
+	// todo test dropping the segments and reading again
 }
 
 func TestGetRange(t *testing.T) {
