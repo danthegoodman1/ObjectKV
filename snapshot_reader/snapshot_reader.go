@@ -33,7 +33,8 @@ func NewReader(f SegmentReaderFactoryFunc) *Reader {
 			// safe to do off only first key since last key >= first key always
 			return bytes.Compare(a.Metadata.FirstKey, b.Metadata.FirstKey) < 0
 		}),
-		indexMu: &sync.RWMutex{},
+		indexMu:       &sync.RWMutex{},
+		readerFactory: f,
 	}
 
 	return sr
