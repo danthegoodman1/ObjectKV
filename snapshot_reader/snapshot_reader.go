@@ -24,17 +24,50 @@ type (
 	SegmentReaderFactoryFunc func(record SegmentRecord) (*sst.SegmentReader, error)
 )
 
+func blockRangeLessFunc(a, b SegmentRecord) bool {
+	// Compare FirstKey first
+	cmp := bytes.Compare(a.Metadata.FirstKey, b.Metadata.FirstKey)
+	if cmp != 0 {
+		return cmp < 0
+	}
+
+	// fmt.Println("checking", string(a.Metadata.LastKey), string(b.Metadata.LastKey))
+
+	// We are looking up where a key belongs in the range ("unbound" range)
+	if len(a.Metadata.LastKey) == 0 {
+		return false
+	}
+	if len(b.Metadata.LastKey) == 0 {
+		return true
+	}
+
+	// Check the last key, reverse order, so the largest range comes first when descending
+	cmp = bytes.Compare(a.Metadata.LastKey, b.Metadata.LastKey)
+	if cmp != 0 {
+		return cmp < 0
+	}
+
+	// this is a bit of a hack to prevent duplicates, while allowing for search
+	// if the ID is blank then we are searching for potentials, so return the opposite
+	if a.ID == "" {
+		return false
+	}
+	if b.ID == "" {
+		return true
+	}
+
+	// If FirstKey is the same, compare ID (so everything is unique)
+	return a.ID < b.ID
+}
+
 func NewReader(f SegmentReaderFactoryFunc) *Reader {
 	sr := &Reader{
 		segmentIDTree: btree.NewG[SegmentRecord](2, func(a, b SegmentRecord) bool {
 			return a.ID < b.ID
 		}),
-		blockRangeTree: btree.NewG[SegmentRecord](2, func(a, b SegmentRecord) bool {
-			// safe to do off only first key since last key >= first key always
-			return bytes.Compare(a.Metadata.FirstKey, b.Metadata.FirstKey) < 0
-		}),
-		indexMu:       &sync.RWMutex{},
-		readerFactory: f,
+		blockRangeTree: btree.NewG[SegmentRecord](2, blockRangeLessFunc),
+		indexMu:        &sync.RWMutex{},
+		readerFactory:  f,
 	}
 
 	return sr
@@ -45,7 +78,7 @@ func NewReader(f SegmentReaderFactoryFunc) *Reader {
 //
 // Drop runs before add.
 //
-// The minimum information to have within a SegmentRecord is the ID and Metadata.FirstKey
+// The minimum information to have within a SegmentRecord is the ID, Metadata.FirstKey, Metadata.LastKey
 func (r *Reader) UpdateSegments(add []SegmentRecord, drop []SegmentRecord) {
 	r.indexMu.Lock()
 	defer r.indexMu.Unlock()
@@ -128,11 +161,11 @@ func (r *Reader) getPossibleSegmentsForKey(key []byte) []SegmentRecord {
 	r.blockRangeTree.DescendLessOrEqual(SegmentRecord{
 		Metadata: sst.SegmentMetadata{FirstKey: key},
 	}, func(item SegmentRecord) bool {
-		lessThan := bytes.Compare(key, item.Metadata.FirstKey) < 0
-		if !lessThan {
+		keyInRange := bytes.Compare(key, item.Metadata.FirstKey) >= 0 && bytes.Compare(key, item.Metadata.LastKey) <= 0
+		if keyInRange {
 			possibleSegments = append(possibleSegments, item)
 		}
-		return lessThan // key is less than first key
+		return keyInRange
 	})
 
 	return possibleSegments

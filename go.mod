@@ -6,6 +6,7 @@ require (
 	github.com/bits-and-blooms/bloom v2.0.3+incompatible
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/danthegoodman1/GoAPITemplate v0.0.0-20240713221854-8ccf52c39601
+	github.com/google/btree v1.1.2
 	github.com/klauspost/compress v1.17.9
 	github.com/rs/zerolog v1.33.0
 	go.opentelemetry.io/otel v1.28.0
@@ -13,6 +14,7 @@ require (
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.28.0
 	go.opentelemetry.io/otel/sdk v1.28.0
 	go.opentelemetry.io/otel/trace v1.28.0
+	golang.org/x/sync v0.7.0
 )
 
 require (
@@ -21,7 +23,6 @@ require (
 	github.com/cockroachdb/cockroach-go/v2 v2.3.5 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/google/btree v1.1.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
@@ -45,7 +46,6 @@ require (
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	golang.org/x/crypto v0.24.0 // indirect
 	golang.org/x/net v0.26.0 // indirect
-	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.21.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240701130421-f6361c86f094 // indirect

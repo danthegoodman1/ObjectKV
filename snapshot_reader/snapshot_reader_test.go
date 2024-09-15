@@ -2,6 +2,7 @@ package snapshot_reader
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"github.com/danthegoodman1/objectkv/sst"
 	"testing"
@@ -64,6 +65,14 @@ func TestGetRow(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Write something not in the first segment
+	key := []byte("key900")
+	val := []byte("value900")
+	err = w.WriteRow(key, val)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	segmentLength3, seg3MetaBytes, err := w.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -72,17 +81,17 @@ func TestGetRow(t *testing.T) {
 	// create snapshot reader
 	snapReader := NewReader(func(record SegmentRecord) (*sst.SegmentReader, error) {
 		var reader sst.SegmentReader
-		if record.ID == "1" {
+		if record.ID == "1-0" {
 			reader = sst.NewSegmentReader(sst.BytesReadSeekCloser{
 				Reader: bytes.NewReader(seg1.Bytes()),
 			}, int(segmentLength1))
 			return &reader, nil
-		} else if record.ID == "2" {
+		} else if record.ID == "2-1" {
 			reader = sst.NewSegmentReader(sst.BytesReadSeekCloser{
 				Reader: bytes.NewReader(seg2.Bytes()),
 			}, int(segmentLength2))
 			return &reader, nil
-		} else if record.ID == "3" {
+		} else if record.ID == "2-0" {
 			reader = sst.NewSegmentReader(sst.BytesReadSeekCloser{
 				Reader: bytes.NewReader(seg3.Bytes()),
 			}, int(segmentLength3))
@@ -109,34 +118,71 @@ func TestGetRow(t *testing.T) {
 	// Add the segments
 	snapReader.UpdateSegments([]SegmentRecord{
 		{
-			ID:       "1",
+			ID:       "1-0",
 			Level:    0,
 			Metadata: *seg1Meta,
 		},
 		{
-			ID:       "2",
+			ID:       "2-1",
 			Level:    0,
 			Metadata: *seg2Meta,
 		},
 		{
-			ID:       "3",
+			ID:       "2-0",
 			Level:    1,
 			Metadata: *seg3Meta,
 		},
 	}, nil)
 
-	// todo read row that exists in first segment
-	val, err := snapReader.GetRow([]byte("key000"))
+	// read row that exists in first segment
+	val, err = snapReader.GetRow([]byte("key000"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log("val:", string(val))
+	if !bytes.Equal([]byte("value000"), val) {
+		t.Fatal("Got unexpected value:", string(val))
+	}
 
-	// todo read row that exists in another segment
-	// todo read row that doesn't exist outside the range of the segments
-	// todo read row that could exist between items but doesn't
+	// read row that exists in another segment
+	val, err = snapReader.GetRow([]byte("key001"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal([]byte("value001"), val) {
+		t.Fatal("Got unexpected value:", string(val))
+	}
 
-	// todo test dropping the segments and reading again
+	// read row that exists in L1 segment
+	val, err = snapReader.GetRow([]byte("key900"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal([]byte("value900"), val) {
+		t.Fatal("Got unexpected value:", string(val))
+	}
+
+	// read row that doesn't exist inside the range of the segments
+	val, err = snapReader.GetRow([]byte("key999"))
+	if !errors.Is(err, sst.ErrNoRows) {
+		t.Fatal("unexpected error", err)
+	}
+
+	// read row that could exist between items but doesn't
+	val, err = snapReader.GetRow([]byte("key800"))
+	if !errors.Is(err, sst.ErrNoRows) {
+		t.Fatal("unexpected error", err)
+	}
+
+	// test dropping the segments and reading again
+	snapReader.UpdateSegments(nil, []SegmentRecord{{
+		ID:       "2-0",
+		Level:    1,
+		Metadata: *seg3Meta,
+	}})
+	val, err = snapReader.GetRow([]byte("key900"))
+	if !errors.Is(err, sst.ErrNoRows) {
+		t.Fatal("unexpected error", err)
+	}
 }
 
 func TestGetRange(t *testing.T) {
