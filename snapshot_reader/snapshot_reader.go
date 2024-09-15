@@ -54,7 +54,7 @@ func blockRangeLessFunc(a, b SegmentRecord) bool {
 		return true
 	}
 
-	// If FirstKey is the same, compare ID (so everything is unique)
+	// If FirstKey and LastKey is the same, compare ID (so everything is unique)
 	return a.ID < b.ID
 }
 
