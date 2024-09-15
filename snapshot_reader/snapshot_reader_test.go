@@ -50,7 +50,7 @@ func TestGetRow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Seg3 will be L1 so it should be skipped (duplicate of Seg2)
+	// Seg3 will be L1, so it should be skipped (duplicate of Seg2)
 	seg3 := &bytes.Buffer{}
 	w = sst.NewSegmentWriter(
 		sst.BytesWriteCloser{
