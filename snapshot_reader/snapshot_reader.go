@@ -31,8 +31,6 @@ func blockRangeLessFunc(a, b SegmentRecord) bool {
 		return cmp < 0
 	}
 
-	// fmt.Println("checking", string(a.Metadata.LastKey), string(b.Metadata.LastKey))
-
 	// We are looking up where a key belongs in the range ("unbound" range)
 	if len(a.Metadata.LastKey) == 0 {
 		return false
