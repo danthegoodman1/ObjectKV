@@ -198,8 +198,8 @@ var ErrInvalidRange = errors.New("invalid range")
 // GetRange will fetch a range of rows up to a limit, starting from some direction.
 // Internally it uses RowIter, and is a convenience wrapper around it.
 //
-// `end` must be greater than `start`, with the range [start, end): start inclusive, end exclusive when
-// sst.DirectionAscending and [end, start) when sst.DirectionDescending. This means you can paginate without
+// `end` must be greater than `start`, with the range [start, end) when sst.DirectionAscending
+// and (start, end] when sst.DirectionDescending. This means you can paginate without
 // worrying about overlap.
 //
 // Runs on a snapshot of segments when invoked, can run concurrently with segment updates.

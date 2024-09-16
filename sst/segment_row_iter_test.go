@@ -377,7 +377,7 @@ func TestRowIterSeek(t *testing.T) {
 	}
 }
 
-func TestEdgeCase(t *testing.T) {
+func TestRollover(t *testing.T) {
 	opts := DefaultSegmentWriterOptions()
 	seg := &bytes.Buffer{}
 	w := NewSegmentWriter(

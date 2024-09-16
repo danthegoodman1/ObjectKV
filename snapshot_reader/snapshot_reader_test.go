@@ -404,7 +404,7 @@ func TestGetRangeDescending(t *testing.T) {
 	}
 
 	// get a range of rows that would only have 1 from start, ensure first key
-	rows, err = snapReader.GetRange([]byte("key000"), []byte("key0000"), 2, sst.DirectionDescending)
+	rows, err = snapReader.GetRange([]byte("key00"), []byte("key000"), 2, sst.DirectionDescending)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -414,7 +414,7 @@ func TestGetRangeDescending(t *testing.T) {
 	}
 
 	// get a range of rows that would only have 1 from end, ensure last key
-	rows, err = snapReader.GetRange([]byte("key900"), []byte("key901"), 2, sst.DirectionDescending)
+	rows, err = snapReader.GetRange([]byte("key899"), []byte("key901"), 2, sst.DirectionDescending)
 	if err != nil {
 		t.Fatal(err)
 	}
