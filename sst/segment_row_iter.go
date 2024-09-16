@@ -95,8 +95,8 @@ func (r *RowIter) Next() (KVPair, error) {
 	return r.blockRows[0], nil
 }
 
-// Seek will seek to the given key, such that any subsequent Next
-// call will return that key or after (or io.EOF).
+// Seek will seek up to the given key, such that any subsequent Next
+// call will return greater than or equal to key (or io.EOF).
 //
 // Can use UnboundStart and UnboundEnd to seek to the start and end
 func (r *RowIter) Seek(key []byte) error {
@@ -118,36 +118,56 @@ func (r *RowIter) Seek(key []byte) error {
 	}
 
 	missingStat := stat == nil
+	var rows []KVPair
+	var err error
+	r.blockRowIdx = 0
 	if missingStat {
 		// there are no more blocks, jump to the ends
 		switch r.direction {
 		case DirectionAscending:
-			// go to the end
-			last, _ := r.s.metadata.BlockIndex.Max()
-			stat = &last
+			// check if we are lower than the first key
+			firstBlock, _ := r.s.metadata.BlockIndex.Min()
+			if bytes.Compare(key, firstBlock.FirstKey) < 0 {
+				// We are at the beginning, set to first
+				stat = &firstBlock
+			} else {
+				// We are past the entire segment, go to the end
+				lastBlock, _ := r.s.metadata.BlockIndex.Max()
+				stat = &lastBlock
+				r.blockRowIdx = len(rows) - 1
+			}
+
 		case DirectionDescending:
-			// go to the start
-			first, _ := r.s.metadata.BlockIndex.Min()
-			stat = &first
+			// check if we are greater than the last key
+			lastBlock, _ := r.s.metadata.BlockIndex.Max()
+			rows, err = r.s.ReadBlockWithStat(lastBlock)
+			if err != nil {
+				return fmt.Errorf("error in ReadBlockWithState to inspect end of last block: %w", err)
+			}
+			if bytes.Compare(key, rows[len(rows)-1].Key) > 0 {
+				// We are at the beginning, set to end
+				stat = &lastBlock
+			} else {
+				// We are past the entire segment, go to the end
+				firstBlock, _ := r.s.metadata.BlockIndex.Min()
+				stat = &firstBlock
+				r.blockRowIdx = len(rows) - 1
+			}
 		}
+	} else {
+		r.blockRowIdx = 0
 	}
 
 	// Set the last key
 	r.statLastKey = key
 	// clear out the loaded block (this could be more efficient)
-	rows, err := r.s.ReadBlockWithStat(*stat)
+	rows, err = r.s.ReadBlockWithStat(*stat)
 	if err != nil {
 		fmt.Errorf("error in SegmentReader.ReadBlockWithStat: %w", err)
 	}
 	r.blockRows = rows
 	if r.direction == DirectionDescending {
 		slices.Reverse(r.blockRows)
-	}
-	if missingStat {
-		r.blockRowIdx = len(rows) - 1
-	} else {
-		// go to the beginning of the block
-		r.blockRowIdx = 0
 	}
 
 	if (r.direction == DirectionAscending && isUnboundEnd) || (r.direction == DirectionDescending && isUnboundStart) {

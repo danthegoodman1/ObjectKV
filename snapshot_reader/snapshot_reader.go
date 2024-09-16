@@ -8,6 +8,7 @@ import (
 	"github.com/danthegoodman1/objectkv/sst"
 	"github.com/google/btree"
 	"golang.org/x/sync/errgroup"
+	"io"
 	"sort"
 	"sync"
 )
@@ -242,6 +243,11 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 	// get row iters for all possible segments
 	segmentIters := make([]sst.RowIter, len(possibleSegments))
 	cursors := make([]sst.KVPair, len(possibleSegments)) // a buffer for the next key
+	startRange := start                                  // what to seek to
+	if direction == sst.DirectionDescending {
+		startRange = end
+	}
+
 	for i, segment := range possibleSegments {
 		g := errgroup.Group{}
 		g.Go(func() error {
@@ -255,10 +261,17 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 				return fmt.Errorf("error in reader.RowIter for segment %s: %w", segment.ID, err)
 			}
 
+			// Seek it
+			// todo current problem is that when we seek to key000 for segment that starts at key001 it hits nil stat bc nothing less and it jumps to end
+			err = iter.Seek(startRange)
+			if err != nil {
+				return fmt.Errorf("error in iter.Seek to start range for segment %s: %w", segment.ID, err)
+			}
+
 			segmentIters[i] = *iter
 			pair, err := segmentIters[i].Next()
 			if err != nil {
-				return fmt.Errorf("error in sst.RowIter.Next() for segment %s: %w", segment.ID, err)
+				return fmt.Errorf("error in sst.RowIter.Next() after start range for segment %s: %w", segment.ID, err)
 			}
 			cursors[i] = pair
 			return nil
@@ -295,7 +308,7 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 				g.Go(func() (err error) {
 					cursors[ind], err = segmentIters[ind].Next()
 					if err != nil {
-						return fmt.Errorf("error in sst.RowIter.Next() for segment %s: %w", possibleSegments[ind].ID, err)
+						return fmt.Errorf("error in sst.RowIter.Next() when rolling forward non matching for segment %s: %w", possibleSegments[ind].ID, err)
 					}
 					return
 				})
@@ -335,10 +348,16 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 		g := errgroup.Group{}
 		for _, ind := range nextIndexes {
 			g.Go(func() (err error) {
-				cursors[ind], err = segmentIters[ind].Next()
-				if err != nil {
-					return fmt.Errorf("error in sst.RowIter.Next() for segment %s: %w", possibleSegments[ind].ID, err)
+				newCursor, err := segmentIters[ind].Next()
+				if errors.Is(err, io.EOF) {
+					// We can't load any more, leave the old value so we don't have any issues
+					return nil
 				}
+				if err != nil {
+					return fmt.Errorf("error in sst.RowIter.Next() for rolling forward matching for segment %s: %w", possibleSegments[ind].ID, err)
+				}
+
+				cursors[ind] = newCursor
 				return
 			})
 			err := g.Wait()
@@ -377,11 +396,11 @@ func firstValue(a, b []byte, direction int) int {
 	return -1
 }
 
-// compareFunc is a type for the comparison function, expects the same format results as bytes.Compare
-type compareFunc[T any] func(a, b T) int
+// intCompareFunc is a type for the comparison function, expects the same format results as bytes.Compare
+type intCompareFunc[T any] func(a, b T) int
 
 // findMaxIndexes is a generic function to find indexes of the largest value
-func findMaxIndexes[T any](arr []T, compare compareFunc[T]) []int {
+func findMaxIndexes[T any](arr []T, compare intCompareFunc[T]) []int {
 	if len(arr) == 0 {
 		return nil
 	}

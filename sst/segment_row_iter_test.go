@@ -324,7 +324,7 @@ func TestRowIterSeek(t *testing.T) {
 		t.Fatal("next row value bytes not equal")
 	}
 
-	// seek out of range
+	// seek before range
 	err = iter.Seek([]byte("key"))
 	if err != nil {
 		t.Fatal(err)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/danthegoodman1/objectkv/sst"
+	"sort"
 	"testing"
 )
 
@@ -206,6 +207,27 @@ func logRows(t *testing.T, rows []sst.KVPair) {
 	}
 }
 
+type boolCompareFunc[T any] func(a T, b T) bool
+
+func isSliceInOrder[T any](slice []T, less boolCompareFunc[T]) bool {
+	// Create a copy of the original slice
+	original := make([]T, len(slice))
+	copy(original, slice)
+
+	// Sort the original slice
+	sort.Slice(slice, func(i, j int) bool {
+		return less(slice[i], slice[j])
+	})
+
+	// Manual comparison
+	for i := range slice {
+		if less(slice[i], original[i]) || less(original[i], slice[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 func TestGetRange(t *testing.T) {
 	r := prepareTestReader(t)
 	snapReader := r.reader
@@ -217,10 +239,16 @@ func TestGetRange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// ensure they are in the right order and length
+	// ensure length and order
 	if len(rows) != 6 {
 		logRows(t, rows)
 		t.Fatal("Got wrong rows length, got", len(rows))
+	}
+	if !isSliceInOrder(rows, func(a sst.KVPair, b sst.KVPair) bool {
+		return bytes.Compare(a.Key, b.Key) < 0
+	}) {
+		logRows(t, rows)
+		t.Fatal("rows were not in expected order")
 	}
 
 	// get same rows but limit
@@ -229,15 +257,60 @@ func TestGetRange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// ensure they are in the right order and length
+	// ensure length and order
 	if len(rows) != 2 {
 		logRows(t, rows)
 		t.Fatal("Got wrong rows length, got", len(rows))
 	}
+	if !isSliceInOrder(rows, func(a sst.KVPair, b sst.KVPair) bool {
+		return bytes.Compare(a.Key, b.Key) < 0
+	}) {
+		logRows(t, rows)
+		t.Fatal("rows were not in expected order")
+	}
 
-	// todo get a range of rows that would only have 1 in middle, ensure only 1
-	// todo get a range of rows that would only have 1 from start, ensure first key
-	// todo get an empty range
+	// get a range of rows that would only have 1 in middle, ensure only 1
+	rows, err = snapReader.GetRange([]byte("key00"), []byte("key0000"), 2, sst.DirectionAscending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		logRows(t, rows)
+		t.Fatal("Got wrong rows length, got", len(rows))
+	}
+
+	// get a range of rows that would only have 1 from start, ensure first key
+	rows, err = snapReader.GetRange([]byte("key000"), []byte("key0000"), 2, sst.DirectionAscending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		logRows(t, rows)
+		t.Fatal("Got wrong rows length, got", len(rows))
+	}
+
+	// get a range of rows that would only have 1 from end, ensure last key
+	rows, err = snapReader.GetRange([]byte("key900"), []byte("key901"), 2, sst.DirectionAscending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		logRows(t, rows)
+		t.Fatal("Got wrong rows length, got", len(rows))
+	}
+
+	// get an empty range
+	rows, err = snapReader.GetRange([]byte("key901"), []byte("key910"), 100, sst.DirectionAscending)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ensure length
+	if len(rows) != 0 {
+		logRows(t, rows)
+		t.Fatal("Got wrong rows length, got", len(rows))
+	}
+
 	// todo get a range in the desc order, check right order
 	// todo get a single row in desc order, ensure top key
 	// todo ensure can get unlimited range
