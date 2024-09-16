@@ -184,3 +184,8 @@ func (r *RowIter) Seek(key []byte) error {
 
 	return nil
 }
+
+// CloseReader proxies to SegmentReader.Close
+func (r *RowIter) CloseReader() error {
+	return r.s.Close()
+}

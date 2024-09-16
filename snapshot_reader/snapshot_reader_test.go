@@ -8,7 +8,12 @@ import (
 	"testing"
 )
 
-func TestGetRow(t *testing.T) {
+type prepareTestReaderReturn struct {
+	reader      *Reader
+	segmentMeta []*sst.SegmentMetadata
+}
+
+func prepareTestReader(t *testing.T) prepareTestReaderReturn {
 	// write records across segments
 	seg1 := &bytes.Buffer{}
 	opts := sst.DefaultSegmentWriterOptions()
@@ -133,9 +138,19 @@ func TestGetRow(t *testing.T) {
 			Metadata: *seg3Meta,
 		},
 	}, nil)
+	return prepareTestReaderReturn{
+		reader:      snapReader,
+		segmentMeta: []*sst.SegmentMetadata{seg1Meta, seg2Meta, seg3Meta},
+	}
+}
+
+func TestGetRow(t *testing.T) {
+	r := prepareTestReader(t)
+	snapReader := r.reader
+	seg3Meta := r.segmentMeta[2]
 
 	// read row that exists in first segment
-	val, err = snapReader.GetRow([]byte("key000"))
+	val, err := snapReader.GetRow([]byte("key000"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,11 +200,41 @@ func TestGetRow(t *testing.T) {
 	}
 }
 
+func logRows(t *testing.T, rows []sst.KVPair) {
+	for _, row := range rows {
+		t.Log(string(row.Key), string(row.Value))
+	}
+}
+
 func TestGetRange(t *testing.T) {
-	// todo write records
-	// todo create snapshot reader
-	// todo get a range of rows that exist
-	//   ensure they are in the right order
+	r := prepareTestReader(t)
+	snapReader := r.reader
+	// seg3Meta := r.segmentMeta[2]
+
+	// get a range of rows that exist
+	rows, err := snapReader.GetRange([]byte("key000"), []byte("key006"), 100, sst.DirectionAscending)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ensure they are in the right order and length
+	if len(rows) != 6 {
+		logRows(t, rows)
+		t.Fatal("Got wrong rows length, got", len(rows))
+	}
+
+	// get same rows but limit
+	rows, err = snapReader.GetRange([]byte("key000"), []byte("key006"), 2, sst.DirectionAscending)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ensure they are in the right order and length
+	if len(rows) != 2 {
+		logRows(t, rows)
+		t.Fatal("Got wrong rows length, got", len(rows))
+	}
+
 	// todo get a range of rows that would only have 1 in middle, ensure only 1
 	// todo get a range of rows that would only have 1 from start, ensure first key
 	// todo get an empty range

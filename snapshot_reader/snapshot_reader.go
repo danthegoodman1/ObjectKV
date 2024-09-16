@@ -158,10 +158,10 @@ func (r *Reader) getPossibleSegmentsForKey(key []byte) []SegmentRecord {
 	// Descend from the key until we hit something too small
 	r.blockRangeTree.DescendLessOrEqual(SegmentRecord{
 		Metadata: sst.SegmentMetadata{FirstKey: key},
-	}, func(item SegmentRecord) bool {
-		keyInRange := bytes.Compare(key, item.Metadata.FirstKey) >= 0 && bytes.Compare(key, item.Metadata.LastKey) <= 0
+	}, func(record SegmentRecord) bool {
+		keyInRange := bytes.Compare(key, record.Metadata.FirstKey) >= 0 && bytes.Compare(key, record.Metadata.LastKey) <= 0
 		if keyInRange {
-			possibleSegments = append(possibleSegments, item)
+			possibleSegments = append(possibleSegments, record)
 		}
 		return keyInRange
 	})
@@ -180,12 +180,13 @@ func (r *Reader) getPossibleSegmentsForRange(start, end []byte) []SegmentRecord 
 	// Descend from the key until we hit something too small
 	r.blockRangeTree.DescendLessOrEqual(SegmentRecord{
 		Metadata: sst.SegmentMetadata{FirstKey: end},
-	}, func(item SegmentRecord) bool {
-		lessThan := bytes.Compare(start, item.Metadata.FirstKey) < 0
-		if !lessThan {
-			possibleSegments = append(possibleSegments, item)
+	}, func(record SegmentRecord) bool {
+		// easier to check the conditions it can't overlap in
+		keyInRange := !(bytes.Compare(start, record.Metadata.LastKey) > 0 || bytes.Compare(end, record.Metadata.FirstKey) < 0)
+		if keyInRange {
+			possibleSegments = append(possibleSegments, record)
 		}
-		return lessThan // key is less than start key
+		return keyInRange
 	})
 
 	return possibleSegments
@@ -196,9 +197,9 @@ var ErrInvalidRange = errors.New("invalid range")
 // GetRange will fetch a range of rows up to a limit, starting from some direction.
 // Internally it uses RowIter, and is a convenience wrapper around it.
 //
-// `end` must be greater than `start`, with the range [start, end): start inclusive, end exclusive.
-// This means that when paginating with sst.DirectionAscending, you will see the
-// `end` of the previous range as your first key in the subsequent page if it's used as the `start`
+// `end` must be greater than `start`, with the range [start, end): start inclusive, end exclusive when
+// sst.DirectionAscending and [end, start) when sst.DirectionDescending. This means you can paginate without
+// worrying about overlap.
 //
 // Runs on a snapshot of segments when invoked, can run concurrently with segment updates.
 //
@@ -249,9 +250,6 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 				return fmt.Errorf("error in r.readerFactor for segment %s: %w", segment.ID, err)
 			}
 
-			// Close all the readers at the end
-			defer reader.Close()
-
 			iter, err := reader.RowIter(direction)
 			if err != nil {
 				return fmt.Errorf("error in reader.RowIter for segment %s: %w", segment.ID, err)
@@ -269,6 +267,11 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 		if err != nil {
 			return nil, fmt.Errorf("error setting up segment iterators: %w", err)
 		}
+	}
+
+	for _, iter := range segmentIters {
+		// Close all the readers at the end
+		defer iter.CloseReader()
 	}
 
 	rows := make([]sst.KVPair, limit)
@@ -312,7 +315,10 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 		}
 
 		// verify that this row is in our range
-		if bytes.Compare(start, row.Key) > 0 || bytes.Compare(end, row.Key) < 0 {
+		if direction == sst.DirectionAscending && bytes.Compare(row.Key, end) >= 0 {
+			break
+		}
+		if direction == sst.DirectionDescending && bytes.Compare(row.Key, start) <= 0 {
 			break
 		}
 
@@ -320,7 +326,7 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 		lastKey = row.Key
 		rows[addedRowIndex] = row
 		addedRowIndex++
-		if addedRowIndex >= limit-1 {
+		if addedRowIndex >= limit {
 			// we have hit the limit
 			break
 		}
@@ -342,7 +348,8 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 		}
 	}
 
-	return rows, nil
+	// Only return a slice of what actually returned
+	return rows[:addedRowIndex], nil
 }
 
 var ErrNoNextIndexFound = errors.New("did not find a next index, this is a bug, please report")
