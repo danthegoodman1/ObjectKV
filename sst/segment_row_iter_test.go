@@ -352,4 +352,99 @@ func TestRowIterSeek(t *testing.T) {
 	if !bytes.Equal(row.Value, []byte("value199")) {
 		t.Fatal("next row value bytes not equal")
 	}
+
+	// Seek to end and check we EOF
+	err = iter.Seek([]byte("key000"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	row, err = iter.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(row.Key, []byte("key000")) {
+		t.Fatal("next row key bytes not equal")
+	}
+	if !bytes.Equal(row.Value, []byte("value000")) {
+		t.Fatal("next row value bytes not equal")
+	}
+
+	row, err = iter.Next()
+	if !errors.Is(err, io.EOF) {
+		t.Fatal(err)
+	}
+}
+
+func TestEdgeCase(t *testing.T) {
+	opts := DefaultSegmentWriterOptions()
+	seg := &bytes.Buffer{}
+	w := NewSegmentWriter(
+		BytesWriteCloser{
+			Buffer: seg,
+		}, opts)
+
+	for i := 1; i < 200; i += 2 {
+		key := []byte(fmt.Sprintf("key%03d", i))
+		val := []byte(fmt.Sprintf("value%03d-I-SHOULD-NOT-SHOW", i)) // todo removing the i should not show changes the wrap high value
+		err := w.WriteRow(key, val)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Write something not in the first segment
+	key := []byte("key900")
+	val := []byte("value900")
+	err := w.WriteRow(key, val)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	segmentLength3, _, err := w.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := NewSegmentReader(
+		BytesReadSeekCloser{
+			Reader: bytes.NewReader(seg.Bytes()),
+		}, int(segmentLength3))
+	defer r.Close()
+
+	iter, err := r.RowIter(DirectionDescending)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = iter.Seek([]byte("key006"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pair, err := iter.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(string(pair.Key))
+
+	pair, err = iter.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(string(pair.Key))
+	pair, err = iter.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(string(pair.Key))
+
+	pair, err = iter.Next()
+	if !errors.Is(err, io.EOF) {
+		t.Log("expected nothing, got", string(pair.Key))
+		t.Fatal(err)
+	}
 }

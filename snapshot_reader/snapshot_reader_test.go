@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/danthegoodman1/objectkv/sst"
 	"sort"
 	"testing"
+
+	"github.com/danthegoodman1/objectkv/sst"
 )
 
 type prepareTestReaderReturn struct {
@@ -228,7 +229,7 @@ func isSliceInOrder[T any](slice []T, less boolCompareFunc[T]) bool {
 	return true
 }
 
-func TestGetRange(t *testing.T) {
+func TestGetRangeAscending(t *testing.T) {
 	r := prepareTestReader(t)
 	snapReader := r.reader
 	// seg3Meta := r.segmentMeta[2]
@@ -329,9 +330,110 @@ func TestGetRange(t *testing.T) {
 		t.Fatal("Got wrong rows length, got", len(rows))
 	}
 
-	// todo get a range in the desc order, check right order
-	// todo get a single row in desc order, ensure top key
+	// Descending order
+
 	// todo ensure can get unlimited range
+}
+
+func TestGetRangeDescending(t *testing.T) {
+	r := prepareTestReader(t)
+	snapReader := r.reader
+
+	// get a range of rows that exist
+	rows, err := snapReader.GetRange([]byte("key000"), []byte("key006"), 100, sst.DirectionDescending)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ensure length and order
+	if len(rows) != 6 {
+		logRows(t, rows)
+		t.Fatal("Got wrong rows length, got", len(rows))
+	}
+	if !isSliceInOrder(rows, func(a sst.KVPair, b sst.KVPair) bool {
+		return bytes.Compare(a.Key, b.Key) > 0
+	}) {
+		logRows(t, rows)
+		t.Fatal("rows were not in expected order")
+	}
+
+	// get same rows but limit
+	rows, err = snapReader.GetRange([]byte("key000"), []byte("key006"), 2, sst.DirectionDescending)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ensure length and order
+	if len(rows) != 2 {
+		logRows(t, rows)
+		t.Fatal("Got wrong rows length, got", len(rows))
+	}
+	if !isSliceInOrder(rows, func(a sst.KVPair, b sst.KVPair) bool {
+		return bytes.Compare(a.Key, b.Key) > 0
+	}) {
+		logRows(t, rows)
+		t.Fatal("rows were not in expected order")
+	}
+
+	// get some middle range
+	rows, err = snapReader.GetRange([]byte("key010"), []byte("key106"), 10, sst.DirectionDescending)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ensure length and order
+	if len(rows) != 10 {
+		logRows(t, rows)
+		t.Fatal("Got wrong rows length, got", len(rows))
+	}
+	if !isSliceInOrder(rows, func(a sst.KVPair, b sst.KVPair) bool {
+		return bytes.Compare(a.Key, b.Key) > 0
+	}) {
+		logRows(t, rows)
+		t.Fatal("rows were not in expected order")
+	}
+
+	// get a range of rows that would only have 1 in middle, ensure only 1
+	rows, err = snapReader.GetRange([]byte("key00"), []byte("key0000"), 2, sst.DirectionDescending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		logRows(t, rows)
+		t.Fatal("Got wrong rows length, got", len(rows))
+	}
+
+	// get a range of rows that would only have 1 from start, ensure first key
+	rows, err = snapReader.GetRange([]byte("key000"), []byte("key0000"), 2, sst.DirectionDescending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		logRows(t, rows)
+		t.Fatal("Got wrong rows length, got", len(rows))
+	}
+
+	// get a range of rows that would only have 1 from end, ensure last key
+	rows, err = snapReader.GetRange([]byte("key900"), []byte("key901"), 2, sst.DirectionDescending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		logRows(t, rows)
+		t.Fatal("Got wrong rows length, got", len(rows))
+	}
+
+	// get an empty range
+	rows, err = snapReader.GetRange([]byte("key901"), []byte("key910"), 100, sst.DirectionDescending)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ensure length
+	if len(rows) != 0 {
+		logRows(t, rows)
+		t.Fatal("Got wrong rows length, got", len(rows))
+	}
 }
 
 func TestFindMaxIndexes(t *testing.T) {
@@ -356,6 +458,22 @@ func TestFindMaxIndexes(t *testing.T) {
 
 	// verify result is []int{0, 1, 3}
 	expected := []int{0, 1, 3}
+
+	if len(indexes) != len(expected) {
+		t.Errorf("Expected %d indexes, but got %d", len(expected), len(indexes))
+	}
+
+	for i, v := range expected {
+		if i >= len(indexes) || indexes[i] != v {
+			t.Errorf("Mismatch at position %d: expected %d, got %d", i, v, indexes[i])
+		}
+	}
+
+	indexes = findMaxIndexes(items, func(a, b sst.KVPair) int {
+		return bytes.Compare(a.Key, b.Key) * -1
+	})
+
+	expected = []int{2}
 
 	if len(indexes) != len(expected) {
 		t.Errorf("Expected %d indexes, but got %d", len(expected), len(indexes))

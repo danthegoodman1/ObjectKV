@@ -262,7 +262,6 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 			}
 
 			// Seek it
-			// todo current problem is that when we seek to key000 for segment that starts at key001 it hits nil stat bc nothing less and it jumps to end
 			err = iter.Seek(startRange)
 			if err != nil {
 				return fmt.Errorf("error in iter.Seek to start range for segment %s: %w", segment.ID, err)
@@ -350,7 +349,7 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 			g.Go(func() (err error) {
 				newCursor, err := segmentIters[ind].Next()
 				if errors.Is(err, io.EOF) {
-					// We can't load any more, leave the old value so we don't have any issues
+					// We can't load any more, set to
 					return nil
 				}
 				if err != nil {
@@ -360,10 +359,10 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 				cursors[ind] = newCursor
 				return
 			})
-			err := g.Wait()
-			if err != nil {
-				return nil, fmt.Errorf("error in errgroup.Group.Wait: %w", err)
-			}
+		}
+		err := g.Wait()
+		if err != nil {
+			return nil, fmt.Errorf("error in errgroup.Group.Wait: %w", err)
 		}
 	}
 

@@ -391,7 +391,9 @@ func (s *SegmentReader) GetRow(key []byte) (KVPair, error) {
 }
 
 // GetRange will get the range of keys [start, end) from the segment.
-// todo delete this method - this should be higher level
+// todo delete this method - this should be higher level - or we should
+//
+//	use this instead of iterators and merge for snapshot reader?
 func (s *SegmentReader) GetRange(start, end []byte) ([]KVPair, error) {
 	if s.metadata == nil {
 		_, err := s.FetchAndLoadMetadata()

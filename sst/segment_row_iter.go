@@ -158,8 +158,9 @@ func (r *RowIter) Seek(key []byte) error {
 		r.blockRowIdx = 0
 	}
 
-	// Set the last key
-	r.statLastKey = key
+	// Set the last key to the start of the stat
+	r.statLastKey = stat.FirstKey
+
 	// clear out the loaded block (this could be more efficient)
 	rows, err = r.s.ReadBlockWithStat(*stat)
 	if err != nil {
