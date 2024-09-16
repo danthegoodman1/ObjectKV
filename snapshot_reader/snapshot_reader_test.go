@@ -269,6 +269,24 @@ func TestGetRange(t *testing.T) {
 		t.Fatal("rows were not in expected order")
 	}
 
+	// get some middle range
+	rows, err = snapReader.GetRange([]byte("key010"), []byte("key106"), 10, sst.DirectionAscending)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ensure length and order
+	if len(rows) != 10 {
+		logRows(t, rows)
+		t.Fatal("Got wrong rows length, got", len(rows))
+	}
+	if !isSliceInOrder(rows, func(a sst.KVPair, b sst.KVPair) bool {
+		return bytes.Compare(a.Key, b.Key) < 0
+	}) {
+		logRows(t, rows)
+		t.Fatal("rows were not in expected order")
+	}
+
 	// get a range of rows that would only have 1 in middle, ensure only 1
 	rows, err = snapReader.GetRange([]byte("key00"), []byte("key0000"), 2, sst.DirectionAscending)
 	if err != nil {
