@@ -27,13 +27,44 @@ func prepareTestReader(t *testing.T) prepareTestReaderReturn {
 
 	for i := 0; i < 200; i += 2 {
 		key := []byte(fmt.Sprintf("key%03d", i))
+		val := []byte(fmt.Sprintf("value%03d-ISHOULDNOTSHOW", i))
+		err := w.WriteRow(key, val)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if i == 0 {
+			// seg1 should be buried, except we stick one in the middle
+			key := []byte("key0010")
+			val := []byte("value0010") // this should get shown between key001 and key002
+			err := w.WriteRow(key, val)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	segmentLength1, seg1MetaBytes, err := w.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	seg1_1 := &bytes.Buffer{}
+	opts.BloomFilter = nil
+	w = sst.NewSegmentWriter(
+		sst.BytesWriteCloser{
+			Buffer: seg1_1,
+		}, opts)
+
+	for i := 0; i < 200; i += 2 {
+		key := []byte(fmt.Sprintf("key%03d", i))
 		val := []byte(fmt.Sprintf("value%03d", i))
 		err := w.WriteRow(key, val)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	segmentLength1, seg1MetaBytes, err := w.Close()
+	segmentLength1_1, seg1_1MetaBytes, err := w.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,6 +124,11 @@ func prepareTestReader(t *testing.T) prepareTestReaderReturn {
 				Reader: bytes.NewReader(seg1.Bytes()),
 			}, int(segmentLength1))
 			return &reader, nil
+		} else if record.ID == "1-1" {
+			reader = sst.NewSegmentReader(sst.BytesReadSeekCloser{
+				Reader: bytes.NewReader(seg1_1.Bytes()),
+			}, int(segmentLength1_1))
+			return &reader, nil
 		} else if record.ID == "2-1" {
 			reader = sst.NewSegmentReader(sst.BytesReadSeekCloser{
 				Reader: bytes.NewReader(seg2.Bytes()),
@@ -108,6 +144,11 @@ func prepareTestReader(t *testing.T) prepareTestReaderReturn {
 	})
 
 	seg1Meta, err := (&sst.SegmentReader{}).BytesToMetadata(seg1MetaBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	seg1_1Meta, err := (&sst.SegmentReader{}).BytesToMetadata(seg1_1MetaBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,6 +171,11 @@ func prepareTestReader(t *testing.T) prepareTestReaderReturn {
 			Metadata: *seg1Meta,
 		},
 		{
+			ID:       "1-1",
+			Level:    0,
+			Metadata: *seg1_1Meta,
+		},
+		{
 			ID:       "2-1",
 			Level:    0,
 			Metadata: *seg2Meta,
@@ -142,14 +188,14 @@ func prepareTestReader(t *testing.T) prepareTestReaderReturn {
 	}, nil)
 	return prepareTestReaderReturn{
 		reader:      snapReader,
-		segmentMeta: []*sst.SegmentMetadata{seg1Meta, seg2Meta, seg3Meta},
+		segmentMeta: []*sst.SegmentMetadata{seg1Meta, seg1_1Meta, seg2Meta, seg3Meta},
 	}
 }
 
 func TestGetRow(t *testing.T) {
 	r := prepareTestReader(t)
 	snapReader := r.reader
-	seg3Meta := r.segmentMeta[2]
+	seg3Meta := r.segmentMeta[3]
 
 	// read row that exists in first segment
 	val, err := snapReader.GetRow([]byte("key000"))
@@ -232,7 +278,6 @@ func isSliceInOrder[T any](slice []T, less boolCompareFunc[T]) bool {
 func TestGetRangeAscending(t *testing.T) {
 	r := prepareTestReader(t)
 	snapReader := r.reader
-	// seg3Meta := r.segmentMeta[2]
 
 	// get a range of rows that exist
 	rows, err := snapReader.GetRange([]byte("key000"), []byte("key006"), 100, sst.DirectionAscending)
@@ -241,8 +286,7 @@ func TestGetRangeAscending(t *testing.T) {
 	}
 
 	// ensure length and order
-	if len(rows) != 6 {
-		logRows(t, rows)
+	if len(rows) != 7 {
 		t.Fatal("Got wrong rows length, got", len(rows))
 	}
 	if !isSliceInOrder(rows, func(a sst.KVPair, b sst.KVPair) bool {
@@ -346,7 +390,7 @@ func TestGetRangeDescending(t *testing.T) {
 	}
 
 	// ensure length and order
-	if len(rows) != 6 {
+	if len(rows) != 7 {
 		logRows(t, rows)
 		t.Fatal("Got wrong rows length, got", len(rows))
 	}
