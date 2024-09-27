@@ -2,6 +2,7 @@ package sst
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"testing"
@@ -722,3 +723,108 @@ func TestReadCompressionZSTD(t *testing.T) {
 }
 
 // todo test probe bloom filter
+
+func TestReadCorruptFileEnd(t *testing.T) {
+	b := &bytes.Buffer{}
+	opts := DefaultSegmentWriterOptions()
+	opts.BloomFilter = nil
+	w := NewSegmentWriter(
+		BytesWriteCloser{
+			Buffer: b,
+		}, opts)
+
+	totalBytes := 0
+	s := time.Now()
+	for i := 0; i < 200; i++ {
+		key := []byte(fmt.Sprintf("key%03d", i))
+		val := []byte(fmt.Sprintf("value%03d", i))
+		err := w.WriteRow(key, val)
+		if err != nil {
+			t.Fatal(err)
+		}
+		totalBytes += len(key) + len(val)
+	}
+	segmentLength, metadataBytes, err := w.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta := time.Since(s)
+	t.Log("Wrote", totalBytes, "in", delta, fmt.Sprintf("%.2fMB/s", float64(totalBytes)/1_000_000/delta.Seconds())) // 22MB/s
+
+	t.Logf("Got %d metadata bytes", len(metadataBytes))
+
+	// corrupt the file
+	randomBytes := make([]byte, 10)
+	rand.Read(randomBytes)
+	written, err := b.Write(randomBytes)
+	if written != 10 {
+		t.Fatal("did not write 10, wrote", written)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Read the bytes
+	r := NewSegmentReader(
+		BytesReadSeekCloser{
+			Reader: bytes.NewReader(b.Bytes()),
+		}, int(segmentLength))
+	_, err = r.FetchAndLoadMetadata()
+	if !errors.Is(err, ErrInvalidMagicNumber) {
+		t.Fatal(err)
+	}
+}
+
+func TestReadCorruptFileMiddle(t *testing.T) {
+	b := &bytes.Buffer{}
+	opts := DefaultSegmentWriterOptions()
+	opts.BloomFilter = nil
+	w := NewSegmentWriter(
+		BytesWriteCloser{
+			Buffer: b,
+		}, opts)
+
+	totalBytes := 0
+	s := time.Now()
+	for i := 0; i < 200; i++ {
+		key := []byte(fmt.Sprintf("key%03d", i))
+		val := []byte(fmt.Sprintf("value%03d", i))
+		err := w.WriteRow(key, val)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if i == 101 {
+			// corrupt the file
+			randomBytes := make([]byte, 10)
+			rand.Read(randomBytes)
+			written, err := b.Write(randomBytes)
+			if written != 10 {
+				t.Fatal("did not write 10, wrote", written)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		totalBytes += len(key) + len(val)
+	}
+	segmentLength, metadataBytes, err := w.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	delta := time.Since(s)
+	t.Log("Wrote", totalBytes, "in", delta, fmt.Sprintf("%.2fMB/s", float64(totalBytes)/1_000_000/delta.Seconds())) // 22MB/s
+
+	t.Logf("Got %d metadata bytes", len(metadataBytes))
+
+	// Read the bytes
+	r := NewSegmentReader(
+		BytesReadSeekCloser{
+			Reader: bytes.NewReader(b.Bytes()),
+		}, int(segmentLength))
+	_, err = r.FetchAndLoadMetadata()
+	if !errors.Is(err, ErrMismatchedMetaBlockHash) {
+		t.Fatal(err)
+	}
+}

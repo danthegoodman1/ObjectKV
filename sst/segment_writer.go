@@ -16,6 +16,16 @@ type BytesWriteCloser struct {
 	*bytes.Buffer
 }
 
+var MagicNumberBytes []byte
+
+const MagicNumber = 69696969696969
+
+func init() {
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, MagicNumber)
+	MagicNumberBytes = b
+}
+
 // Close is a no-op method to satisfy the io.Closer interface.
 func (wc BytesWriteCloser) Close() error {
 	// Since there's nothing to close, simply return nil
@@ -248,10 +258,20 @@ func (s *SegmentWriter) Close() (uint64, []byte, error) {
 	// Write the segment file version
 	bytesWritten, err = s.externalWriter.Write([]byte{1})
 	if err != nil {
-		return 0, nil, fmt.Errorf("error writing final segment bytes to external writer: %w", err)
+		return 0, nil, fmt.Errorf("error writing version bytes to external writer: %w", err)
 	}
 	if bytesWritten != 1 {
 		return 0, nil, fmt.Errorf("%w (meta block offset) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, 1, bytesWritten)
+	}
+	s.currentByteOffset += uint64(bytesWritten)
+
+	// write the magic number
+	bytesWritten, err = s.externalWriter.Write(MagicNumberBytes)
+	if err != nil {
+		return 0, nil, fmt.Errorf("error writing magic number bytes to external writer: %w", err)
+	}
+	if bytesWritten != 8 {
+		return 0, nil, fmt.Errorf("%w (meta block offset) - expected=%d wrote=%d", ErrUnexpectedBytesWritten, 8, bytesWritten)
 	}
 	s.currentByteOffset += uint64(bytesWritten)
 

@@ -74,6 +74,7 @@ var (
 	ErrUnknownSegmentVersion   = errors.New("unknown segment version")
 	ErrMismatchedMetaBlockHash = errors.New("mismatched meta block hash")
 	ErrInvalidMetaBlock        = errors.New("invalid meta block")
+	ErrInvalidMagicNumber      = errors.New("sst file did not have magic number as final bytes")
 )
 
 // FetchAndLoadMetadata will load the metadata from the file it not already held in the reader, then returns it (for caching).
@@ -81,17 +82,22 @@ var (
 // While a bytes.Reader might be less memory and allocation efficient than inspecting the byte array directly, it is well
 // worth it to simplify the code and ensure correctness. This likely only happens once per file anyway with metadata caching.
 func (s *SegmentReader) FetchAndLoadMetadata() (*SegmentMetadata, error) {
-	// get final 17 bytes of file
-	_, err := s.reader.Seek(-17, io.SeekEnd)
+	// get final bytes of file
+	_, err := s.reader.Seek(-25, io.SeekEnd)
 	if err != nil {
-		return nil, fmt.Errorf("error in reader.Seek to last 17 bytes: %w", err)
+		return nil, fmt.Errorf("error in reader.Seek to last 25 bytes: %w", err)
 	}
 
 	// read the bytes
-	finalSegmentBytes := make([]byte, 17)
+	finalSegmentBytes := make([]byte, 25)
 	_, err = s.reader.Read(finalSegmentBytes)
 	if err != nil {
 		return nil, fmt.Errorf("error reading final segment bytes: %w", err)
+	}
+
+	magicNumber := binary.LittleEndian.Uint64(finalSegmentBytes[17:])
+	if magicNumber != MagicNumber {
+		return nil, ErrInvalidMagicNumber
 	}
 
 	segmentVersion := finalSegmentBytes[16]
@@ -108,7 +114,7 @@ func (s *SegmentReader) FetchAndLoadMetadata() (*SegmentMetadata, error) {
 		return nil, fmt.Errorf("error in reader.Seek to meta block offset: %w", err)
 	}
 
-	metaBlockBytes := make([]byte, s.fileBytes-int(metaBlockOffset)-17)
+	metaBlockBytes := make([]byte, s.fileBytes-int(metaBlockOffset)-25)
 	_, err = s.reader.Read(metaBlockBytes)
 	if err != nil {
 		return nil, fmt.Errorf("error in reader.Read for meta block bytes: %w", err)
