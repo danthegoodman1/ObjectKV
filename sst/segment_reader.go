@@ -71,10 +71,11 @@ func (s *SegmentReader) LoadCachedMetadata(metadata *SegmentMetadata) {
 }
 
 var (
-	ErrUnknownSegmentVersion   = errors.New("unknown segment version")
-	ErrMismatchedMetaBlockHash = errors.New("mismatched meta block hash")
-	ErrInvalidMetaBlock        = errors.New("invalid meta block")
-	ErrInvalidMagicNumber      = errors.New("sst file did not have magic number as final bytes")
+	FatalError                 = errors.New("fatal error (crash node!)")
+	ErrUnknownSegmentVersion   = fmt.Errorf("%w: unknown segment version", FatalError)
+	ErrMismatchedMetaBlockHash = fmt.Errorf("%w: mismatched meta block hash", FatalError)
+	ErrInvalidMetaBlock        = fmt.Errorf("%w: invalid meta block", FatalError)
+	ErrInvalidMagicNumber      = fmt.Errorf("%w: sst file did not have magic number as final bytes", FatalError)
 )
 
 // FetchAndLoadMetadata will load the metadata from the file it not already held in the reader, then returns it (for caching).

@@ -770,7 +770,7 @@ func TestReadCorruptFileEnd(t *testing.T) {
 			Reader: bytes.NewReader(b.Bytes()),
 		}, int(segmentLength))
 	_, err = r.FetchAndLoadMetadata()
-	if !errors.Is(err, ErrInvalidMagicNumber) {
+	if !errors.Is(err, ErrInvalidMagicNumber) || !errors.Is(err, FatalError) {
 		t.Fatal(err)
 	}
 }
@@ -824,7 +824,7 @@ func TestReadCorruptFileMiddle(t *testing.T) {
 			Reader: bytes.NewReader(b.Bytes()),
 		}, int(segmentLength))
 	_, err = r.FetchAndLoadMetadata()
-	if !errors.Is(err, ErrMismatchedMetaBlockHash) {
+	if !errors.Is(err, ErrMismatchedMetaBlockHash) || !errors.Is(err, FatalError) {
 		t.Fatal(err)
 	}
 }
