@@ -22,6 +22,10 @@ func TestHierarchicalTupleOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HierarchicalTuple{[]byte(\"dir\"), []byte(\"b\")}.Pack() failed: %v", err)
 	}
+	dirUnicode, err := HierarchicalTuple{[]byte("dir"), []byte("🚨")}.Pack()
+	if err != nil {
+		t.Fatalf("HierarchicalTuple{[]byte(\"dir\"), []byte(\"🚨\")}.Pack() failed: %v", err)
+	}
 	dirA1, err := HierarchicalTuple{[]byte("dir"), []byte("a"), []byte("1")}.Pack()
 	if err != nil {
 		t.Fatalf("HierarchicalTuple{[]byte(\"dir\"), []byte(\"a\"), []byte(\"1\")}.Pack() failed: %v", err)
@@ -29,10 +33,11 @@ func TestHierarchicalTupleOrdering(t *testing.T) {
 
 	// Create all keys we want to test ordering of
 	keys := [][]byte{
-		dir,   // The directory itself
-		dirA,  // Should be included
-		dirB,  // Should be included
-		dirA1, // Deeper entry
+		dir,        // The directory itself
+		dirA,       // Should be included
+		dirB,       // Should be included
+		dirUnicode, // Should be included
+		dirA1,      // Deeper entry
 	}
 
 	// Print keys in lexicographic order for visual verification
