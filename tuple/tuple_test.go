@@ -1,6 +1,7 @@
 package tuple
 
 import (
+	"bytes"
 	"reflect"
 	"testing"
 )
@@ -112,7 +113,7 @@ func TestNestedTuple(t *testing.T) {
 
 			// Test prefix range
 			start, end := tt.in.GetPrefixRange()
-			if start >= end {
+			if bytes.Compare(start, end) >= 0 {
 				t.Error("prefix range start should be less than end")
 			}
 		})
@@ -122,31 +123,31 @@ func TestNestedTuple(t *testing.T) {
 func TestInvalidDecode(t *testing.T) {
 	tests := []struct {
 		name    string
-		encoded string
+		encoded []byte
 	}{
 		{
-			name:    "empty string",
-			encoded: "",
+			name:    "empty bytes",
+			encoded: []byte{},
 		},
 		{
 			name:    "missing separator prefix",
-			encoded: "hello",
+			encoded: []byte("hello"),
 		},
 		{
 			name:    "incomplete null",
-			encoded: "/\x00",
+			encoded: []byte("/\x00"),
 		},
 		{
 			name:    "invalid type code",
-			encoded: "/\x09hello\x00",
+			encoded: []byte("/\x09hello\x00"),
 		},
 		{
 			name:    "unterminated string",
-			encoded: "/\x02hello",
+			encoded: []byte("/\x02hello"),
 		},
 		{
 			name:    "unterminated nested tuple",
-			encoded: "/\x05\x02hello\x00",
+			encoded: []byte("/\x05\x02hello\x00"),
 		},
 	}
 
@@ -217,7 +218,7 @@ func TestSingleItemTuple(t *testing.T) {
 
 			// Test prefix range
 			start, end := tt.in.GetPrefixRange()
-			if start >= end {
+			if bytes.Compare(start, end) >= 0 {
 				t.Error("prefix range start should be less than end")
 			}
 		})

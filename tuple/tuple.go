@@ -22,52 +22,60 @@ const (
 // Tuple represents an ordered list of elements that can be encoded into a key. Tuples can be nested.
 type Tuple []any
 
-// EncodeTuple encodes a sequence of items into a sortable string key.
+// Encode encodes a sequence of items into a sortable byte key.
 // Each item can be a string, []byte, nil, or Tuple (nested tuple)
-func (t Tuple) Encode() string {
-	var result strings.Builder
-	result.WriteString(itemSeparator)
+func (t Tuple) Encode() []byte {
+	var result []byte
+	result = append(result, itemSeparator[0])
 
 	for _, item := range t {
 		switch v := item.(type) {
 		case nil:
 			// Null is encoded as \x00\xFF
-			result.WriteString(nullByte + boundaryByte)
+			result = append(result, nullByte[0], boundaryByte[0])
 		case string:
 			// Unicode strings are encoded as \x02 + UTF8 bytes with null escaped + \x00
-			result.WriteString(typeString)
-			result.WriteString(escapeNulls([]byte(v)))
-			result.WriteString(nullByte)
+			result = append(result, typeString[0])
+			result = append(result, escapeNulls([]byte(v))...)
+			result = append(result, nullByte[0])
 		case []byte:
 			// Byte strings are encoded as \x01 + bytes with null escaped + \x00
-			result.WriteString(typeBytes)
-			result.WriteString(escapeNulls(v))
-			result.WriteString(nullByte)
+			result = append(result, typeBytes[0])
+			result = append(result, escapeNulls(v)...)
+			result = append(result, nullByte[0])
 		case Tuple:
 			// Nested tuples are encoded as \x05 + encoded elements + \x00
-			result.WriteString(typeNested)
+			result = append(result, typeNested[0])
 			encoded := v.Encode()
 			// Skip the leading separator when nesting
 			if len(encoded) > 1 {
-				result.WriteString(encoded[1:])
+				result = append(result, encoded[1:]...)
 			}
-			result.WriteString(nullByte)
+			result = append(result, nullByte[0])
 		}
 	}
 
-	return result.String()
+	return result
 }
 
 // escapeNulls replaces null bytes with \x00\xFF to maintain proper ordering
-func escapeNulls(b []byte) string {
-	return strings.ReplaceAll(string(b), nullByte, nullByte+boundaryByte)
+func escapeNulls(b []byte) []byte {
+	result := make([]byte, 0, len(b)*2)
+	for _, c := range b {
+		if c == nullByte[0] {
+			result = append(result, nullByte[0], boundaryByte[0])
+		} else {
+			result = append(result, c)
+		}
+	}
+	return result
 }
 
 // GetPrefixRange returns (start_key, end_key) for range query to list all tuples
 // that match the given prefix items.
-func (t Tuple) GetPrefixRange() (string, string) {
+func (t Tuple) GetPrefixRange() ([]byte, []byte) {
 	startKey := t.Encode()
-	endKey := startKey + boundaryByte
+	endKey := append(startKey, boundaryByte[0])
 	return startKey, endKey
 }
 
@@ -91,10 +99,10 @@ func Pack(items ...any) Tuple {
 // ErrInvalidTuple indicates the encoded tuple string is malformed
 var ErrInvalidTuple = errors.New("invalid tuple encoding")
 
-// Decode parses an encoded tuple string back into a Tuple.
+// Decode parses an encoded tuple byte slice back into a Tuple.
 // Returns error if the encoding is invalid.
-func Decode(encoded string) (Tuple, error) {
-	if !strings.HasPrefix(encoded, itemSeparator) {
+func Decode(encoded []byte) (Tuple, error) {
+	if len(encoded) == 0 || encoded[0] != itemSeparator[0] {
 		return nil, ErrInvalidTuple
 	}
 
@@ -147,7 +155,7 @@ func Decode(encoded string) (Tuple, error) {
 }
 
 // decodeString reads a string value until null terminator, handling escaped nulls
-func decodeString(encoded string) (string, int, error) {
+func decodeString(encoded []byte) (string, int, error) {
 	var result strings.Builder
 	pos := 0
 
@@ -172,7 +180,7 @@ func decodeString(encoded string) (string, int, error) {
 }
 
 // decodeBytes reads a byte array value until null terminator, handling escaped nulls
-func decodeBytes(encoded string) ([]byte, int, error) {
+func decodeBytes(encoded []byte) ([]byte, int, error) {
 	var result []byte
 	pos := 0
 
@@ -197,7 +205,7 @@ func decodeBytes(encoded string) ([]byte, int, error) {
 }
 
 // decodeNested reads a nested tuple until null terminator
-func decodeNested(encoded string) (Tuple, int, error) {
+func decodeNested(encoded []byte) (Tuple, int, error) {
 	var result Tuple
 	pos := 0
 
