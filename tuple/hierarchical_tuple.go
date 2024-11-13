@@ -8,6 +8,8 @@ import (
 
 type HierarchicalTuple []any
 
+const partitionByte = 0xff
+
 // Pack creates a tuple using byte elements
 func (ht HierarchicalTuple) Pack() ([]byte, error) {
 	// By skipping 1 (no prefix for single item), we make sure that all "root" entries are listed first
@@ -39,7 +41,7 @@ func (ht HierarchicalTuple) pack(skip int) ([]byte, error) {
 
 	for i := 0; i < len(temp)-skip; i++ {
 		// For all but the last item, we must append 0xff
-		temp[i] = append([]byte{0xff}, temp[i]...)
+		temp[i] = append([]byte{partitionByte}, temp[i]...)
 	}
 
 	t := Tuple{}
@@ -67,12 +69,12 @@ func DecodeHierarchical(b []byte) (HierarchicalTuple, error) {
 		return nil, fmt.Errorf("%w: got %s", ErrInvalidHierarchicalElement, reflect.TypeOf(element))
 	}
 
-	if len(temp) > 1 && temp[0].([]byte)[0] != 0xff {
+	if len(temp) > 1 && temp[0].([]byte)[0] != partitionByte {
 		return nil, fmt.Errorf("%w: first element did not start with hierarchical byte", ErrInvalidHierarchicalElement)
 	}
 
 	for i := 0; i < len(temp)-1; i++ {
-		// For all but the last item, we must rip off the trailing 0xff
+		// For all but the last item, we must rip off the trailing partitionByte
 		temp[i] = temp[i].([]byte)[1:]
 	}
 
