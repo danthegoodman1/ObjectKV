@@ -8,10 +8,11 @@ import (
 
 type HierarchicalTuple []any
 
-const partitionByte = 0xff
+const partitionByte = 0xff // max byte so even a key starting with 0xff can't break the ordering
 
 // Pack creates a tuple using byte elements
 func (ht HierarchicalTuple) Pack() ([]byte, error) {
+	// TODO: verify that no byte is larger than partitionByte
 	// By skipping 1 (no prefix for single item), we make sure that all "root" entries are listed first
 	return ht.pack(1)
 }
