@@ -31,9 +31,15 @@ func TestHierarchicalTupleOrdering(t *testing.T) {
 		t.Fatalf("HierarchicalTuple{[]byte(\"dir\"), []byte(\"a\"), []byte(\"1\")}.Pack() failed: %v", err)
 	}
 
+	dir2, err := HierarchicalTuple{[]byte("dir2")}.Pack()
+	if err != nil {
+		t.Fatalf("HierarchicalTuple{[]byte(\"dir\"), []byte(\"a\"), []byte(\"1\")}.Pack() failed: %v", err)
+	}
+
 	// Create all keys we want to test ordering of
 	keys := [][]byte{
 		dir,        // The directory itself
+		dir2,       // same level
 		dirA,       // Should be included
 		dirB,       // Should be included
 		dirUnicode, // Should be included
@@ -121,6 +127,10 @@ func TestHierarchicalRangeKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HierarchicalTuple{[]byte(\"dir\"), []byte(\"a\"), []byte(\"1\")}.Pack() failed: %v", err)
 	}
+	dir2, err := HierarchicalTuple{[]byte("dir2")}.Pack()
+	if err != nil {
+		t.Fatalf("HierarchicalTuple{[]byte(\"dir\"), []byte(\"a\"), []byte(\"1\")}.Pack() failed: %v", err)
+	}
 
 	startRange, endRange, err := HierarchicalTuple{[]byte("dir")}.RangeKeys()
 	if err != nil {
@@ -152,5 +162,8 @@ func TestHierarchicalRangeKeys(t *testing.T) {
 	}
 	if bytes.Compare(endRange, dirA1) >= 0 {
 		t.Fatalf("end range %q was not less than dirA1 %q", endRange, dirA1)
+	}
+	if bytes.Compare(endRange, dir2) <= 0 {
+		t.Fatalf("end range %q was not less than dir2 %q", endRange, dirA1)
 	}
 }

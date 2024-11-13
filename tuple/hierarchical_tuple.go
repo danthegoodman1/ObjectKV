@@ -10,6 +10,7 @@ type HierarchicalTuple []any
 
 // Pack creates a tuple using byte elements
 func (ht HierarchicalTuple) Pack() ([]byte, error) {
+	// By skipping 1 (no prefix for single item), we make sure that all "root" entries are listed first
 	return ht.pack(1)
 }
 
