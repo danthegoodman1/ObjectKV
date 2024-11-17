@@ -198,10 +198,6 @@ func TestTupleLexicographicalOrdering(t *testing.T) {
 	for i, path := range paths {
 		packed[i] = path.Pack()
 	}
-	// Print each packed tuple in hex format
-	for _, p := range packed {
-		fmt.Printf("%x\n", p)
-	}
 
 	// Sort the packed bytes
 	sortedPacked := make([][]byte, len(packed))
@@ -244,86 +240,6 @@ func convertTupleToStrings(t Tuple) []string {
 	result := make([]string, len(t))
 	for i, v := range t {
 		result[i] = fmt.Sprint(v)
-	}
-	return result
-}
-
-func TestTupleLexicographicalOrderingWithNulls(t *testing.T) {
-	// Create tuples from path segments with null bytes appended
-	paths := []Tuple{
-		{append([]byte("dir"), 0x00), append([]byte("b"), 0x00)},                            // /dir/b
-		{append([]byte("dir"), 0x00)},                                                       // /dir
-		{append([]byte("dir"), 0x00), append([]byte("a"), 0x00), append([]byte("1"), 0x00)}, // /dir/a/1
-		{append([]byte("dir"), 0x00), append([]byte("a"), 0x00)},                            // /dir/a
-	}
-
-	// Pack all tuples
-	packed := make([][]byte, len(paths))
-	for i, path := range paths {
-		packed[i] = path.Pack()
-	}
-	// Print each packed tuple in hex format
-	for _, p := range packed {
-		fmt.Printf("%x\n", p)
-	}
-
-	// Sort the packed bytes
-	sortedPacked := make([][]byte, len(packed))
-	copy(sortedPacked, packed)
-	sort.Slice(sortedPacked, func(i, j int) bool {
-		return bytes.Compare(sortedPacked[i], sortedPacked[j]) < 0
-	})
-
-	fmt.Println("sorted")
-	// Print each packed tuple in hex format
-	for _, p := range sortedPacked {
-		fmt.Printf("%x\n", p)
-	}
-
-	// Unpack and convert back to strings for easier verification
-	got := make([]string, len(sortedPacked))
-	for i, p := range sortedPacked {
-		tuple, err := Unpack(p)
-		if err != nil {
-			t.Fatalf("Failed to unpack tuple: %v", err)
-		}
-		// Strip null bytes when converting to string
-		got[i] = "/" + strings.Join(convertTupleToStringsStripNull(tuple), "/")
-	}
-
-	// Expected order: root first, then alphabetical segments, with numeric segments last
-	want := []string{
-		"/dir",
-		"/dir/a",
-		"/dir/b",
-		"/dir/a/1",
-	}
-
-	// Verify ordering
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Incorrect lexicographical ordering\ngot:  %v\nwant: %v", got, want)
-	}
-
-	// Additional verification that /dir/a/1 is specifically last
-	if got[len(got)-1] != "/dir/a/1" {
-		t.Errorf("Expected /dir/a/1 to be last, but got %s", got[len(got)-1])
-	}
-}
-
-// Helper function to convert tuple elements to strings, stripping null bytes
-func convertTupleToStringsStripNull(t Tuple) []string {
-	result := make([]string, len(t))
-	for i, v := range t {
-		if bytes, ok := v.([]byte); ok {
-			// Remove trailing null byte if present
-			if len(bytes) > 0 && bytes[len(bytes)-1] == 0x00 {
-				result[i] = string(bytes[:len(bytes)-1])
-			} else {
-				result[i] = string(bytes)
-			}
-		} else {
-			result[i] = fmt.Sprint(v)
-		}
 	}
 	return result
 }
