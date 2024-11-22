@@ -374,8 +374,6 @@ func TestGetRangeAscending(t *testing.T) {
 		t.Fatal("Got wrong rows length, got", len(rows))
 	}
 
-	// Descending order
-
 	// todo ensure can get unlimited range
 }
 
