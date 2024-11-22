@@ -331,6 +331,7 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 			break
 		}
 		if direction == sst.DirectionDescending && bytes.Compare(row.Key, start) <= 0 {
+			// The start is the end bound
 			break
 		}
 
@@ -349,7 +350,7 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 			g.Go(func() (err error) {
 				newCursor, err := segmentIters[ind].Next()
 				if errors.Is(err, io.EOF) {
-					// We can't load any more, set to
+					// We can't load anymore
 					return nil
 				}
 				if err != nil {
