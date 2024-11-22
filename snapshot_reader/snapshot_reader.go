@@ -330,7 +330,7 @@ func (r *Reader) GetRange(start []byte, end []byte, limit, direction int) ([]sst
 		if direction == sst.DirectionAscending && bytes.Compare(row.Key, end) >= 0 {
 			break
 		}
-		if direction == sst.DirectionDescending && bytes.Compare(row.Key, start) <= 0 {
+		if direction == sst.DirectionDescending && bytes.Compare(row.Key, start) < 0 {
 			break
 		}
 
