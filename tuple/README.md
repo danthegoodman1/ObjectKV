@@ -22,7 +22,13 @@ dir/b
 
 The packages have fundamentally interfaces so they are less likely to be accidentally mixed.
 
-For example, this ordering is the same as S3 during a ListObject call.
+For example, this ordering is the same as S3 during a ListObjectV2 call.
+
+Note that while HierarchicalTuple is a convenience, the functionality of listing dirs can still be done without infinitely listing children: If you have some delimiter (e.g. `/`), once you encounter it, you can go to the next byte prefix.
+
+For example, if you are listing `/` and have `a/` and `b/`, but `a/` has infinite children, once you see `a/`, you can then start a new list call from `a << 1` to get the next highest byte prefix.
+
+Obviously this is not as efficient since it is worst case `O(N)` to list `N` records, where HierarchicalTuple format would be `O(1)` to list `N` records. 
 
 ### HierarchicalTuple
 
