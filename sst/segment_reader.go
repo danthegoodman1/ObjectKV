@@ -5,12 +5,18 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
+
 	"github.com/bits-and-blooms/bloom"
 	"github.com/cespare/xxhash/v2"
 	"github.com/google/btree"
 	"github.com/klauspost/compress/zstd"
-	"io"
 )
+
+func init() {
+	// ensure interface implementation at compile time
+	var _ io.ReadSeekCloser = BytesReadSeekCloser{}
+}
 
 // BytesReadSeekCloser is a wrapper around bytes.Reader that implements io.ReadSeekCloser
 type BytesReadSeekCloser struct {
